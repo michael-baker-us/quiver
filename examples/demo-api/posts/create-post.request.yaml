@@ -1,0 +1,13 @@
+name: Create a post
+method: POST
+url: "{{baseUrl}}/posts"
+body:
+  type: json
+  content:
+    title: Hello from quiver
+    body: Git-friendly API collections
+    userId: 1
+tests:
+  - status: 201
+  - jsonpath: $.title
+    equals: Hello from quiver

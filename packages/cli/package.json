@@ -1,0 +1,19 @@
+{
+  "name": "@quiver/cli",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "quiver": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@quiver/core": "^0.1.0",
+    "commander": "^12.1.0",
+    "picocolors": "^1.1.0"
+  }
+}

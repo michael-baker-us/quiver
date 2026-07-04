@@ -1,0 +1,11 @@
+name: List users
+method: GET
+url: "{{baseUrl}}/users"
+tests:
+  - status: 200
+  - header: content-type
+    contains: application/json
+  - jsonpath: $[0].id
+    exists: true
+capture:
+  firstUserId: $[0].id

@@ -1,0 +1,7 @@
+name: JSONPlaceholder Demo
+description: >
+  Sample collection against the public JSONPlaceholder API.
+  Run it with: quiver run examples/demo-api --env default
+defaults:
+  headers:
+    Accept: application/json

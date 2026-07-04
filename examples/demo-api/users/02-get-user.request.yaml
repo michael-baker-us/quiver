@@ -1,0 +1,10 @@
+# Uses the id captured by 01-list-users — demonstrates request chaining.
+name: Get first user
+method: GET
+url: "{{baseUrl}}/users/{{firstUserId}}"
+tests:
+  - status: 200
+  - jsonpath: $.id
+    equals: 1
+  - jsonpath: $.address.city
+    exists: true
