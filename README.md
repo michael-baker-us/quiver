@@ -128,20 +128,76 @@ convert Swagger 2.0 specs first (e.g. `npx swagger2openapi`).
 ## CLI
 
 ```text
-quiver send   <file>  [--env <name>] [--verbose]
-quiver run    <dir>   [--env <name>] [--bail] [--reporter pretty|json] [--verbose]
-quiver list   <dir>
-quiver import <spec>  --out <dir> [--force]
-quiver ui     <dir>   [--port <port>] [--no-open]
+quiver send       <file>  [--env <name>] [--verbose]
+quiver run        <dir>   [--env <name>] [--bail] [--reporter pretty|json|junit|html] [--output <file>] [--verbose]
+quiver report     <file>  --format junit|html [--output <file>] [--name <name>]
+quiver list       <dir>
+quiver import     <spec>  --out <dir> [--force]
+quiver export-k6  <dir>   --out <file> [--env <name>] [--vus <n>] [--duration <duration>]
+quiver ui         <dir>   [--port <port>] [--no-open]
 ```
 
 Exit codes: `0` all passed, `1` failures, `2` usage/config error — safe to
-drop straight into CI:
+drop straight into CI.
+
+### Reports for CI (JUnit, HTML)
+
+```bash
+quiver run my-api --env ci --reporter junit --output results.xml   # Jenkins/GitLab/GitHub test reports
+quiver run my-api --env ci --reporter html  --output report.html   # a single self-contained artifact
+```
+
+Each assertion becomes its own JUnit testcase (`Login ➜ status is 200`), so a
+test viewer shows exactly which check failed, not just which request. If you
+need more than one format from a single run — the common case in CI — run
+once with `--reporter json` and reformat the saved file, so the collection's
+requests (and any side effects, like a POST creating a resource) never
+execute twice:
+
+```bash
+quiver run my-api --env ci --reporter json --output run.json
+quiver report run.json --format junit --output results.xml
+quiver report run.json --format html  --output report.html
+```
+
+### GitHub Action
 
 ```yaml
-# .github/workflows/api-tests.yml (example step)
-- run: node packages/cli/dist/index.js run collections/my-api --env ci --reporter json
+# .github/workflows/api-tests.yml, in *your* repo
+- uses: michael-baker-us/quiver/.github/actions/run@main
+  with:
+    collection: collections/my-api
+    environment: ci
+- uses: actions/upload-artifact@v4
+  if: always()
+  with:
+    name: quiver-report
+    path: |
+      quiver-results.xml
+      quiver-results.html
 ```
+
+Runs the collection exactly once, publishes `passed`/`failed` step outputs
+and a `$GITHUB_STEP_SUMMARY` line, and fails the step if anything failed.
+quiver isn't published to a registry, so the action checks out and builds
+its own source into `.quiver-tool/` before running — the standard pattern
+for a composite action that ships a real CLI. See `.github/actions/run/action.yml`.
+
+### k6 load-test export
+
+```bash
+quiver export-k6 my-api --env staging --out script.js --vus 20 --duration 2m
+k6 run script.js
+```
+
+Generates a runnable [k6](https://k6.io) script from the collection: same
+request order, same capture-based chaining (translated into real JS
+variables), same assertions (as k6 `check()`s). `{{$env.NAME}}` secrets stay
+dynamic — mapped to k6's own `-e NAME=value` mechanism — rather than baked
+into the generated file; other `{{variables}}` are resolved once from the
+chosen environment at export time. This is the bridge from "does this API
+behave correctly" (quiver) to "does this API hold up under load" (k6) without
+hand-translating requests.
 
 ## Web UI
 
@@ -175,12 +231,15 @@ For UI development: `quiver ui <dir> --port 4123 --no-open` in one terminal,
 ```text
 packages/
 ├── core/    # engine: schema (zod), loader, {{var}} resolution, HTTP
-│            # execution, assertions, runner, OpenAPI import.
+│            # execution, assertions, runner, OpenAPI import, k6 export.
 │            # No CLI or UI dependencies.
-├── cli/     # thin client of core: commands + reporters
+├── cli/     # thin client of core: commands + reporters (json/junit/html)
 └── server/  # local HTTP server: JSON API over core + hosts the built UI
 apps/
 └── ui/      # React frontend (Vite); builds into packages/server/public
+.github/
+├── actions/run/  # composite GitHub Action wrapping `quiver run`
+└── workflows/    # this repo's own CI (unit tests + a dogfooding API-test job)
 ```
 
 The core package is the product; the CLI (and the future web UI) are thin
@@ -194,12 +253,12 @@ that discipline is what keeps the GUI and CLI behavior identical.
 - [x] **M2 — OpenAPI import**: generate a collection skeleton from a spec
 - [x] **M3 — web UI**: `quiver ui` opens a local app; reads/writes the same
       YAML files, aimed at non-technical teammates
-- [ ] **M4 — integrations**: JUnit XML reporter (Jenkins/GitLab), HTML report,
+- [x] **M4 — integrations**: JUnit XML reporter (Jenkins/GitLab), HTML report,
       GitHub Action, k6 script export
 - [x] Form-based request editor in the UI (alongside YAML view)
 - [ ] Later: delete/rename requests from the UI, cookies/sessions, file
       upload, request scripts, parallel runs, watch mode (auto-refresh on
-      external file changes)
+      external file changes), a JMeter/Newman export alongside k6
 
 ## Development
 

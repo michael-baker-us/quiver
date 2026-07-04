@@ -3,9 +3,10 @@ import path from "node:path";
 import { Command } from "commander";
 import pc from "picocolors";
 import { spawn } from "node:child_process";
-import { mkdir, readdir, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { startUiServer } from "@quiver/server";
 import {
+  exportK6,
   findCollectionRoot,
   importOpenApi,
   listEnvironments,
@@ -17,7 +18,28 @@ import {
   runRequest,
   type RunSummary,
 } from "@quiver/core";
-import { reportJson, reportResult, reportSummary } from "./reporter.js";
+import {
+  buildHtmlReport,
+  buildJunitXml,
+  reportResult,
+  reportSummary,
+  toJsonSummary,
+  type JsonSummary,
+} from "./reporter.js";
+
+const BATCH_REPORTERS = ["json", "junit", "html"] as const;
+type BatchReporter = (typeof BATCH_REPORTERS)[number];
+
+function formatSummary(
+  reporter: BatchReporter,
+  summary: RunSummary,
+  collectionName: string,
+): string {
+  const data = toJsonSummary(summary);
+  if (reporter === "json") return JSON.stringify(data, null, 2);
+  if (reporter === "junit") return buildJunitXml(data);
+  return buildHtmlReport(data, collectionName);
+}
 
 const program = new Command();
 
@@ -90,7 +112,12 @@ program
   .argument("<dir>", "collection directory (contains collection.yaml)")
   .option("-e, --env <name>", "environment to load variables from")
   .option("-b, --bail", "stop at the first failing request")
-  .option("-r, --reporter <name>", "output format: pretty | json", "pretty")
+  .option(
+    "-r, --reporter <name>",
+    "output format: pretty | json | junit | html",
+    "pretty",
+  )
+  .option("-o, --output <file>", "write the json/junit/html report to a file instead of stdout")
   .option("-v, --verbose", "show passing assertions and captured variables")
   .action(
     async (
@@ -99,11 +126,17 @@ program
         env?: string;
         bail?: boolean;
         reporter: string;
+        output?: string;
         verbose?: boolean;
       },
     ) => {
-      if (options.reporter !== "pretty" && options.reporter !== "json") {
-        fail(`Unknown reporter "${options.reporter}" — use pretty or json`);
+      const isBatchReporter = (r: string): r is BatchReporter =>
+        (BATCH_REPORTERS as readonly string[]).includes(r);
+      if (options.reporter !== "pretty" && !isBatchReporter(options.reporter)) {
+        fail(`Unknown reporter "${options.reporter}" — use pretty, ${BATCH_REPORTERS.join(", ")}`);
+      }
+      if (options.output && options.reporter === "pretty") {
+        fail(`--output requires --reporter ${BATCH_REPORTERS.join(", ")}`);
       }
       const loaded = await loadCollection(dir);
       const variables = await resolveVariables(loaded.rootDir, options.env);
@@ -120,9 +153,77 @@ program
             : undefined,
       });
 
-      if (options.reporter === "json") reportJson(summary);
-      else reportSummary(summary);
+      if (options.reporter === "pretty") {
+        reportSummary(summary);
+      } else if (isBatchReporter(options.reporter)) {
+        const text = formatSummary(options.reporter, summary, loaded.collection.name);
+        if (options.output) {
+          await writeFile(options.output, text);
+          console.error(pc.dim(`Wrote ${options.reporter} report to ${options.output}`));
+        } else {
+          console.log(text);
+        }
+      }
       process.exit(exitCode(summary));
+    },
+  );
+
+program
+  .command("report")
+  .description("Reformat a saved `quiver run --reporter json` file as junit or html")
+  .argument("<file>", "JSON file produced by quiver run --reporter json")
+  .requiredOption("-f, --format <format>", "junit | html")
+  .option("-o, --output <file>", "write to a file instead of stdout")
+  .option("-n, --name <name>", "collection name shown in the html report title", "quiver run")
+  .action(async (file: string, options: { format: string; output?: string; name: string }) => {
+    if (options.format !== "junit" && options.format !== "html") {
+      fail(`Unknown format "${options.format}" — use junit or html`);
+    }
+    let raw: string;
+    try {
+      raw = await readFile(file, "utf8");
+    } catch {
+      return fail(`${file} not found or unreadable`);
+    }
+    let data: JsonSummary;
+    try {
+      data = JSON.parse(raw) as JsonSummary;
+    } catch {
+      return fail(`${file} is not valid JSON`);
+    }
+    if (typeof data.passed !== "number" || !Array.isArray(data.results)) {
+      fail(`${file} doesn't look like a quiver JSON run report`);
+    }
+    const text = options.format === "junit" ? buildJunitXml(data) : buildHtmlReport(data, options.name);
+    if (options.output) {
+      await writeFile(options.output, text);
+      console.log(`Wrote ${options.format} report to ${options.output}`);
+    } else {
+      console.log(text);
+    }
+  });
+
+program
+  .command("export-k6")
+  .description("Generate a k6 load-testing script from a collection")
+  .argument("<dir>", "collection directory (contains collection.yaml)")
+  .requiredOption("-o, --out <file>", "path to write the generated script")
+  .option("-e, --env <name>", "environment to resolve {{variables}} from at export time")
+  .option("--vus <n>", "virtual users", "10")
+  .option("--duration <duration>", "k6 duration string, e.g. 30s, 5m", "30s")
+  .action(
+    async (
+      dir: string,
+      options: { out: string; env?: string; vus: string; duration: string },
+    ) => {
+      const loaded = await loadCollection(dir);
+      const variables = await resolveVariables(loaded.rootDir, options.env);
+      const vus = Number(options.vus);
+      if (!Number.isFinite(vus) || vus <= 0) fail(`--vus must be a positive number`);
+      const script = exportK6(loaded, variables, { vus, duration: options.duration });
+      await writeFile(options.out, script);
+      console.log(`Wrote k6 script to ${options.out}`);
+      console.log(pc.dim(`\nRun it with: k6 run ${options.out}`));
     },
   );
 

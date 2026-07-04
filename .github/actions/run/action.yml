@@ -1,0 +1,94 @@
+name: 'quiver run'
+description: 'Run a quiver API collection and publish JUnit/HTML reports'
+branding:
+  icon: 'send'
+  color: 'blue'
+
+inputs:
+  collection:
+    description: 'Path to the collection directory (contains collection.yaml), relative to the caller repo root'
+    required: true
+  environment:
+    description: 'Environment name to load variables from (a file under environments/)'
+    required: false
+  bail:
+    description: 'Stop at the first failing request'
+    required: false
+    default: 'false'
+  junit-output:
+    description: 'Path to write a JUnit XML report (relative to the caller repo root)'
+    required: false
+    default: 'quiver-results.xml'
+  html-output:
+    description: 'Path to write a self-contained HTML report (relative to the caller repo root)'
+    required: false
+    default: 'quiver-results.html'
+  ref:
+    description: 'quiver ref to build (branch/tag/sha) — defaults to the version of this action in use'
+    required: false
+    default: ${{ github.action_ref }}
+
+outputs:
+  passed:
+    description: 'Number of passing assertions'
+    value: ${{ steps.run.outputs.passed }}
+  failed:
+    description: 'Number of failing assertions'
+    value: ${{ steps.run.outputs.failed }}
+
+runs:
+  using: 'composite'
+  steps:
+    # quiver isn't published to a registry, so the action bootstraps its own
+    # source into a side directory and builds it — the standard pattern for
+    # composite actions that ship a real CLI rather than a single script.
+    - name: Check out quiver
+      uses: actions/checkout@v4
+      with:
+        repository: michael-baker-us/quiver
+        ref: ${{ inputs.ref }}
+        path: .quiver-tool
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Build quiver
+      shell: bash
+      working-directory: .quiver-tool
+      run: |
+        npm ci
+        npm run build
+
+    - name: Run collection (captures JSON once — never re-runs the requests)
+      id: run
+      shell: bash
+      run: |
+        QUIVER=".quiver-tool/packages/cli/dist/index.js"
+        ENV_FLAG=""
+        if [ -n "${{ inputs.environment }}" ]; then ENV_FLAG="--env ${{ inputs.environment }}"; fi
+        BAIL_FLAG=""
+        if [ "${{ inputs.bail }}" = "true" ]; then BAIL_FLAG="--bail"; fi
+
+        set +e
+        node "$QUIVER" run "${{ inputs.collection }}" $ENV_FLAG $BAIL_FLAG \
+          --reporter json --output quiver-run.json
+        RUN_EXIT=$?
+        set -e
+
+        node "$QUIVER" report quiver-run.json --format junit --output "${{ inputs.junit-output }}"
+        node "$QUIVER" report quiver-run.json --format html --output "${{ inputs.html-output }}" \
+          --name "${{ inputs.collection }}"
+
+        PASSED=$(node -e "console.log(require('./quiver-run.json').passed)")
+        FAILED=$(node -e "console.log(require('./quiver-run.json').failed)")
+        echo "passed=$PASSED" >> "$GITHUB_OUTPUT"
+        echo "failed=$FAILED" >> "$GITHUB_OUTPUT"
+        {
+          echo "### quiver run — ${{ inputs.collection }}";
+          echo "";
+          echo "**$PASSED passed, $FAILED failed**";
+        } >> "$GITHUB_STEP_SUMMARY"
+
+        exit $RUN_EXIT

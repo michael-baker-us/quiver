@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
+      - run: npm run build
+      - run: npm test
+
+  # Dogfoods quiver against its own demo collection, against the public
+  # JSONPlaceholder API. Runs the CLI directly (rather than through the
+  # composite action in .github/actions/run, which checks out quiver from
+  # GitHub — the right shape for *consumer* repos, not for quiver's own CI).
+  api-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm ci
+      - run: npm run build
+      - name: Run demo collection
+        run: |
+          QUIVER=packages/cli/dist/index.js
+          set +e
+          node "$QUIVER" run examples/demo-api --env default --reporter json --output quiver-run.json
+          RUN_EXIT=$?
+          set -e
+          node "$QUIVER" report quiver-run.json --format junit --output quiver-results.xml
+          node "$QUIVER" report quiver-run.json --format html --output quiver-results.html --name "quiver demo API"
+          exit $RUN_EXIT
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: quiver-report
+          path: |
+            quiver-results.xml
+            quiver-results.html

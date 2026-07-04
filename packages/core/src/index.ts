@@ -8,3 +8,4 @@ export * from "./runner.js";
 export * from "./openapi/deref.js";
 export * from "./openapi/example.js";
 export * from "./openapi/import.js";
+export * from "./k6export.js";
