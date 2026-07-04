@@ -208,6 +208,12 @@ tests:
         finishes — captures flow between requests exactly as they do in CI.
       </p>
       <p>
+        The response appears below the request. Drag the divider between them
+        to resize (double-click it to reset), or use the layout button next
+        to the file path to put the response side-by-side with the request
+        instead.
+      </p>
+      <p>
         The command line runs the very same files, which is how these tests
         run in pipelines:
       </p>

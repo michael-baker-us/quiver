@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { getRequestFile, saveRequestFile, sendRequest, type SendResult } from "./api.js";
 import { ResponsePane } from "./ResponsePane.js";
 import { RequestFormTab, TAB_LABELS, tabBadge, type FormTab } from "./RequestForm.js";
+import { DEFAULT_SPLIT, MAX_SPLIT, MIN_SPLIT, SplitPane, type SplitOrientation } from "./SplitPane.js";
 import {
   HTTP_METHODS,
   parseRequestContent,
@@ -33,6 +34,26 @@ export function RequestPanel({
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<SendResult | null>(null);
+  const [splitOrientation, setSplitOrientation] = useState<SplitOrientation>(() =>
+    localStorage.getItem("quiver-split-orientation") === "row" ? "row" : "column",
+  );
+  const [splitRatio, setSplitRatio] = useState<number>(() => {
+    const stored = Number(localStorage.getItem("quiver-split-ratio"));
+    return stored >= MIN_SPLIT && stored <= MAX_SPLIT ? stored : DEFAULT_SPLIT;
+  });
+
+  function toggleSplitOrientation() {
+    setSplitOrientation((current) => {
+      const next = current === "column" ? "row" : "column";
+      localStorage.setItem("quiver-split-orientation", next);
+      return next;
+    });
+  }
+
+  function handleSplitRatio(ratio: number) {
+    setSplitRatio(ratio);
+    localStorage.setItem("quiver-split-ratio", String(ratio));
+  }
 
   function applyLoadedContent(text: string, saved: string | null) {
     setContent(text);
@@ -177,6 +198,18 @@ export function RequestPanel({
           {relativePath}
           {dirty && <span className="dirty-dot" title="Unsaved changes" />}
         </span>
+        <button
+          className="ghost icon-only"
+          onClick={toggleSplitOrientation}
+          title={
+            splitOrientation === "column"
+              ? "Show response side-by-side"
+              : "Show response below"
+          }
+          aria-label="Toggle request/response layout"
+        >
+          {splitOrientation === "column" ? "◫" : "⊟"}
+        </button>
       </div>
 
       <div className="url-bar">
@@ -216,73 +249,82 @@ export function RequestPanel({
         </button>
       </div>
 
-      <div className="tab-strip">
-        {mode === "form" && formData ? (
-          (Object.keys(TAB_LABELS) as FormTab[]).map((key) => {
-            const badge = tabBadge(formData, key);
-            return (
-              <button
-                key={key}
-                className={tab === key ? "active" : undefined}
-                onClick={() => setTab(key)}
-              >
-                {TAB_LABELS[key]}
-                {badge === "dot" && <span className="tab-dot" />}
-                {typeof badge === "number" && badge > 0 && (
-                  <span className="tab-count">{badge}</span>
-                )}
-              </button>
-            );
-          })
-        ) : (
-          <span className="hint" style={{ alignSelf: "center" }}>
-            Raw file — comments and formatting are preserved until you save from Form view.
-          </span>
-        )}
-        <div className="mode-toggle">
-          <button
-            className={mode === "form" ? "active" : undefined}
-            onClick={switchToForm}
-            disabled={mode === "form"}
-          >
-            Form
-          </button>
-          <button
-            className={mode === "yaml" ? "active" : undefined}
-            onClick={switchToYaml}
-            disabled={mode === "yaml"}
-          >
-            YAML
-          </button>
-        </div>
-      </div>
-
-      {mode === "form" ? (
-        formData ? (
-          <div className="tab-body">
-            <RequestFormTab tab={tab} value={formData} onChange={setFormData} />
-          </div>
-        ) : (
-          <div className="problem">
-            {formError ?? "Could not parse this file into the form editor."}
-            <div>
-              <button onClick={switchToYaml}>Switch to YAML view to fix it</button>
+      <SplitPane
+        orientation={splitOrientation}
+        ratio={splitRatio}
+        onRatioChange={handleSplitRatio}
+        first={
+          <>
+            <div className="tab-strip">
+              {mode === "form" && formData ? (
+                (Object.keys(TAB_LABELS) as FormTab[]).map((key) => {
+                  const badge = tabBadge(formData, key);
+                  return (
+                    <button
+                      key={key}
+                      className={tab === key ? "active" : undefined}
+                      onClick={() => setTab(key)}
+                    >
+                      {TAB_LABELS[key]}
+                      {badge === "dot" && <span className="tab-dot" />}
+                      {typeof badge === "number" && badge > 0 && (
+                        <span className="tab-count">{badge}</span>
+                      )}
+                    </button>
+                  );
+                })
+              ) : (
+                <span className="hint" style={{ alignSelf: "center" }}>
+                  Raw file — comments and formatting are preserved until you save from Form view.
+                </span>
+              )}
+              <div className="mode-toggle">
+                <button
+                  className={mode === "form" ? "active" : undefined}
+                  onClick={switchToForm}
+                  disabled={mode === "form"}
+                >
+                  Form
+                </button>
+                <button
+                  className={mode === "yaml" ? "active" : undefined}
+                  onClick={switchToYaml}
+                  disabled={mode === "yaml"}
+                >
+                  YAML
+                </button>
+              </div>
             </div>
-          </div>
-        )
-      ) : (
-        <div className="yaml-pane">
-          <textarea
-            className="editor"
-            spellCheck={false}
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-          />
-        </div>
-      )}
 
-      {problem && <div className="problem">{problem}</div>}
-      {result && <ResponsePane result={result} />}
+            {mode === "form" ? (
+              formData ? (
+                <div className="tab-body">
+                  <RequestFormTab tab={tab} value={formData} onChange={setFormData} />
+                </div>
+              ) : (
+                <div className="problem">
+                  {formError ?? "Could not parse this file into the form editor."}
+                  <div>
+                    <button onClick={switchToYaml}>Switch to YAML view to fix it</button>
+                  </div>
+                </div>
+              )
+            ) : (
+              <div className="yaml-pane">
+                <textarea
+                  className="editor"
+                  spellCheck={false}
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                />
+              </div>
+            )}
+
+            {problem && <div className="problem">{problem}</div>}
+          </>
+        }
+        second={result ? <ResponsePane result={result} /> : null}
+      />
     </div>
   );
 }

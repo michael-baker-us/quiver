@@ -216,9 +216,11 @@ only.
 The layout follows the conventions Postman users already know: method + URL
 + Send in a bar at the top, with Params / Headers / Auth / Body / Tests /
 Capture tabs below it and the response docked underneath (status, time,
-size, assertion results, syntax-highlighted JSON). The sidebar has a filter
-box and collapsible folders; light and dark themes follow the OS with a
-manual toggle. `⌘+Enter` sends, `⌘+S` saves.
+size, assertion results, syntax-highlighted JSON). The request/response
+split is resizable by dragging the divider and can be flipped between
+stacked and side-by-side layouts. The sidebar has a filter box and
+collapsible folders; light and dark themes follow the OS with a manual
+toggle. `⌘+Enter` sends, `⌘+S` saves.
 
 The **Guide** button in the top bar opens built-in documentation covering
 the request format, variables, secrets, every assertion type, and

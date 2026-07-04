@@ -529,6 +529,7 @@ kbd {
 .tab-strip {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 0.1rem;
   padding: 0.3rem 1rem 0;
   border-bottom: 1px solid var(--border);
@@ -759,17 +760,79 @@ textarea.editor {
   max-width: 360px;
 }
 
+/* ---- request/response split ---- */
+.split {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+}
+
+.split-column {
+  flex-direction: column;
+}
+
+.split-row {
+  flex-direction: row;
+}
+
+.split.dragging {
+  user-select: none;
+}
+
+.split.dragging iframe,
+.split.dragging textarea {
+  pointer-events: none;
+}
+
+.split-first {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.split-second {
+  flex: 1 1 0%;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.split-divider {
+  flex-shrink: 0;
+  background: var(--border);
+  touch-action: none;
+  transition: background 0.12s;
+}
+
+.split-column > .split-divider {
+  height: 4px;
+  cursor: row-resize;
+}
+
+.split-row > .split-divider {
+  width: 4px;
+  cursor: col-resize;
+}
+
+.split-divider:hover,
+.split.dragging .split-divider {
+  background: var(--accent);
+}
+
 /* ---- response ---- */
 .response {
-  border-top: 1px solid var(--border);
+  flex: 1;
+  min-height: 0;
   background: var(--bg-sunken);
   padding: 0.6rem 1rem 0.9rem;
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
-  max-height: 55%;
   overflow-y: auto;
-  flex-shrink: 0;
 }
 
 .response-meta {
