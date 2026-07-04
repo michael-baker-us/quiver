@@ -9,6 +9,8 @@ import { Sidebar } from "./Sidebar.js";
 import { RequestPanel } from "./RequestPanel.js";
 import { RunPanel } from "./RunPanel.js";
 import { Docs } from "./Docs.js";
+import { NewRequestDialog } from "./NewRequestDialog.js";
+import { useTheme } from "./theme.js";
 
 const NEW_REQUEST_TEMPLATE = `name: My new request
 method: GET
@@ -17,18 +19,6 @@ tests:
   - status: 200
 `;
 
-/** Normalizes user input like "users/create user" to a valid request path. */
-function toRequestPath(input: string): string | null {
-  const cleaned = input
-    .trim()
-    .replace(/^[/.]+/, "")
-    .replace(/\.request\.ya?ml$/i, "")
-    .replace(/\.ya?ml$/i, "")
-    .replace(/\s+/g, "-");
-  if (!cleaned || cleaned.includes("..")) return null;
-  return `${cleaned}.request.yaml`;
-}
-
 export function App() {
   const [collection, setCollection] = useState<CollectionInfo | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -36,8 +26,10 @@ export function App() {
   const [selected, setSelected] = useState<string | null>(null);
   const [draft, setDraft] = useState<string | null>(null);
   const [showDocs, setShowDocs] = useState(false);
+  const [showNewDialog, setShowNewDialog] = useState(false);
   const [runEvents, setRunEvents] = useState<RunEvent[] | null>(null);
   const [running, setRunning] = useState(false);
+  const [theme, toggleTheme] = useTheme();
 
   const refresh = useMemo(
     () => () =>
@@ -53,13 +45,8 @@ export function App() {
     refresh();
   }, [refresh]);
 
-  function handleNewRequest() {
-    const input = window.prompt(
-      "Path for the new request (folders group requests, e.g. users/create-user):",
-    );
-    if (!input) return;
-    const path = toRequestPath(input);
-    if (!path) return;
+  function handleCreate(path: string) {
+    setShowNewDialog(false);
     setDraft(path);
     setSelected(path);
     setShowDocs(false);
@@ -96,11 +83,22 @@ export function App() {
   return (
     <div className="app">
       <header className="topbar">
-        <span className="brand">quiver</span>
+        <span className="brand">
+          <span className="brand-mark">q</span>
+          quiver
+        </span>
         <span className="collection-name">{collection.name}</span>
         <span className="spacer" />
-        <button onClick={() => setShowDocs((v) => !v)}>
-          {showDocs ? "Close guide" : "📖 Guide"}
+        <button className="ghost" onClick={() => setShowDocs((v) => !v)}>
+          {showDocs ? "Close guide" : "Guide"}
+        </button>
+        <button
+          className="ghost icon-only"
+          onClick={toggleTheme}
+          title={theme === "dark" ? "Switch to light theme" : "Switch to dark theme"}
+          aria-label="Toggle theme"
+        >
+          {theme === "dark" ? "☀️" : "🌙"}
         </button>
         {collection.environments.length > 0 && (
           <label className="env-picker">
@@ -124,7 +122,7 @@ export function App() {
           selected={selected}
           draft={draft}
           onSelect={handleSelect}
-          onNew={handleNewRequest}
+          onNew={() => setShowNewDialog(true)}
         />
         <main className="main">
           {showDocs ? (
@@ -143,22 +141,40 @@ export function App() {
             />
           ) : (
             <div className="empty">
+              <h2>Welcome to {collection.name}</h2>
               <p>Select a request on the left to view, edit, and send it.</p>
               <p className="hint">
-                New here? Open the <button className="link" onClick={() => setShowDocs(true)}>guide</button>{" "}
+                New here? Open the{" "}
+                <button className="link" onClick={() => setShowDocs(true)}>
+                  guide
+                </button>{" "}
                 for a walkthrough of requests, variables, and tests.
               </p>
               <p className="hint">
                 Requests are plain YAML files in your Git repository — anything
                 you save here shows up in <code>git diff</code>.
               </p>
+              <p className="hint">
+                Tips: <kbd>⌘</kbd>+<kbd>Enter</kbd> sends the open request,{" "}
+                <kbd>⌘</kbd>+<kbd>S</kbd> saves it.
+              </p>
             </div>
           )}
         </main>
         {runEvents !== null && (
-          <RunPanel events={runEvents} onClose={() => setRunEvents(null)} />
+          <RunPanel
+            events={runEvents}
+            running={running}
+            onClose={() => setRunEvents(null)}
+          />
         )}
       </div>
+      {showNewDialog && (
+        <NewRequestDialog
+          onCreate={handleCreate}
+          onClose={() => setShowNewDialog(false)}
+        />
+      )}
     </div>
   );
 }

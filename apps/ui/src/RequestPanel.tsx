@@ -1,8 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getRequestFile, saveRequestFile, sendRequest, type SendResult } from "./api.js";
 import { ResponsePane } from "./ResponsePane.js";
-import { RequestForm } from "./RequestForm.js";
-import { parseRequestContent, stringifyFormData, type RequestFormData } from "./requestFormData.js";
+import { RequestFormTab, TAB_LABELS, tabBadge, type FormTab } from "./RequestForm.js";
+import {
+  HTTP_METHODS,
+  parseRequestContent,
+  stringifyFormData,
+  type RequestFormData,
+} from "./requestFormData.js";
 
 type EditorMode = "form" | "yaml";
 
@@ -24,6 +29,7 @@ export function RequestPanel({
   const [formData, setFormData] = useState<RequestFormData | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
   const [mode, setMode] = useState<EditorMode>("form");
+  const [tab, setTab] = useState<FormTab>("params");
   const [problem, setProblem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<SendResult | null>(null);
@@ -81,6 +87,19 @@ export function RequestPanel({
   const liveSerialized = mode === "form" && formData ? stringifyFormData(formData) : content;
   const dirty = liveSerialized !== null && liveSerialized !== savedContent;
 
+  // In YAML mode the URL bar is read-only (the text is the source of truth;
+  // editing these fields would force a rewrite that destroys comments).
+  // Parsing here is read-only and safe; mid-edit parse failures fall back to
+  // the last good form state.
+  const barData = useMemo(() => {
+    if (mode === "form") return formData;
+    if (content !== null) {
+      const parsed = parseRequestContent(content);
+      if ("data" in parsed) return parsed.data;
+    }
+    return formData;
+  }, [mode, formData, content]);
+
   async function save(): Promise<boolean> {
     if (liveSerialized === null) return false;
     setProblem(null);
@@ -118,17 +137,108 @@ export function RequestPanel({
     }
   }
 
+  // Postman muscle memory: Cmd/Ctrl+Enter sends, Cmd/Ctrl+S saves.
+  const actions = useRef({ send, save, dirty, busy });
+  actions.current = { send, save, dirty, busy };
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if (!(event.metaKey || event.ctrlKey)) return;
+      const { send, save, dirty, busy } = actions.current;
+      if (event.key === "Enter" && !busy) {
+        event.preventDefault();
+        void send();
+      } else if (event.key === "s") {
+        event.preventDefault();
+        if (dirty && !busy) void save();
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
   if (content === null) {
     return <div className="empty">{problem ?? "Loading…"}</div>;
   }
 
+  const formEditable = mode === "form" && formData !== null;
+
   return (
     <div className="request-panel">
-      <div className="panel-header">
+      <div className="request-header">
+        <input
+          className="request-title"
+          value={barData?.name ?? ""}
+          placeholder="Untitled request"
+          disabled={!formEditable}
+          onChange={(e) => formData && setFormData({ ...formData, name: e.target.value })}
+          title={formEditable ? "Click to rename" : "Switch to Form view to rename"}
+        />
         <span className="path">
           {relativePath}
           {dirty && <span className="dirty-dot" title="Unsaved changes" />}
         </span>
+      </div>
+
+      <div className="url-bar">
+        <div className="url-bar-group">
+          <select
+            value={barData?.method ?? "GET"}
+            disabled={!formEditable}
+            onChange={(e) =>
+              formData &&
+              setFormData({ ...formData, method: e.target.value as RequestFormData["method"] })
+            }
+          >
+            {HTTP_METHODS.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </select>
+          <input
+            value={barData?.url ?? ""}
+            placeholder="{{baseUrl}}/path"
+            spellCheck={false}
+            disabled={!formEditable}
+            onChange={(e) => formData && setFormData({ ...formData, url: e.target.value })}
+          />
+        </div>
+        <button onClick={() => void save()} disabled={!dirty || busy}>
+          Save
+        </button>
+        <button
+          className="primary"
+          onClick={() => void send()}
+          disabled={busy}
+          title="⌘+Enter"
+        >
+          {busy ? "Sending…" : "Send"}
+        </button>
+      </div>
+
+      <div className="tab-strip">
+        {mode === "form" && formData ? (
+          (Object.keys(TAB_LABELS) as FormTab[]).map((key) => {
+            const badge = tabBadge(formData, key);
+            return (
+              <button
+                key={key}
+                className={tab === key ? "active" : undefined}
+                onClick={() => setTab(key)}
+              >
+                {TAB_LABELS[key]}
+                {badge === "dot" && <span className="tab-dot" />}
+                {typeof badge === "number" && badge > 0 && (
+                  <span className="tab-count">{badge}</span>
+                )}
+              </button>
+            );
+          })
+        ) : (
+          <span className="hint" style={{ alignSelf: "center" }}>
+            Raw file — comments and formatting are preserved until you save from Form view.
+          </span>
+        )}
         <div className="mode-toggle">
           <button
             className={mode === "form" ? "active" : undefined}
@@ -145,18 +255,13 @@ export function RequestPanel({
             YAML
           </button>
         </div>
-        <span className="spacer" />
-        <button onClick={() => void save()} disabled={!dirty || busy}>
-          Save
-        </button>
-        <button className="primary" onClick={() => void send()} disabled={busy}>
-          {busy ? "Sending…" : "Send"}
-        </button>
       </div>
 
       {mode === "form" ? (
         formData ? (
-          <RequestForm value={formData} onChange={setFormData} />
+          <div className="tab-body">
+            <RequestFormTab tab={tab} value={formData} onChange={setFormData} />
+          </div>
         ) : (
           <div className="problem">
             {formError ?? "Could not parse this file into the form editor."}
@@ -166,12 +271,14 @@ export function RequestPanel({
           </div>
         )
       ) : (
-        <textarea
-          className="editor"
-          spellCheck={false}
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-        />
+        <div className="yaml-pane">
+          <textarea
+            className="editor"
+            spellCheck={false}
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+          />
+        </div>
       )}
 
       {problem && <div className="problem">{problem}</div>}

@@ -16,20 +16,29 @@ export function Docs() {
 
       <h2>Creating a request</h2>
       <p>
-        Click <strong>+ New request</strong> at the top of the sidebar and
-        give it a path like <code>users/create-user</code>. Folders group
+        Click <strong>+ New</strong> at the top of the sidebar and give the
+        request a path like <code>users/create-user</code>. Folders group
         related requests; they are created automatically. You get a template
         to fill in, and the request appears in the sidebar after your first
         save.
       </p>
       <p>
-        Every request has two views, switchable at the top of the panel:{" "}
-        <strong>Form</strong> — dropdowns and fields, no YAML knowledge
-        needed — and <strong>YAML</strong> — the raw file text, for anyone
-        who prefers it or needs something the form doesn&apos;t expose. They
-        edit the same file; switching or saving from Form view rewrites the
-        file from its fields, so any comments or unusual formatting only
-        survive while you stay in YAML view.
+        A request works the way you&apos;d expect from other API clients: the
+        method and URL sit in the bar at the top next to <strong>Send</strong>,
+        and everything else lives in the tabs below it —{" "}
+        <strong>Params</strong>, <strong>Headers</strong>, <strong>Auth</strong>,{" "}
+        <strong>Body</strong>, <strong>Tests</strong>, and{" "}
+        <strong>Capture</strong>. Click the request&apos;s name at the top to
+        rename it. <kbd>⌘</kbd>+<kbd>Enter</kbd> sends, <kbd>⌘</kbd>+
+        <kbd>S</kbd> saves.
+      </p>
+      <p>
+        Every request also has a raw <strong>YAML</strong> view (the toggle at
+        the right end of the tab strip) showing the actual file text, for
+        anyone who prefers it or needs something the form doesn&apos;t expose.
+        Both views edit the same file; switching or saving from Form view
+        rewrites the file from its fields, so any comments or unusual
+        formatting only survive while you stay in YAML view.
       </p>
       <p>
         Requests run in alphabetical order when you <strong>Run all</strong>,

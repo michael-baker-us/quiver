@@ -1,10 +1,49 @@
 import {
-  HTTP_METHODS,
   newTestRow,
   type KeyValueRow,
   type RequestFormData,
   type TestFormRow,
 } from "./requestFormData.js";
+
+export type FormTab =
+  | "params"
+  | "headers"
+  | "auth"
+  | "body"
+  | "tests"
+  | "capture"
+  | "settings";
+
+export const TAB_LABELS: Record<FormTab, string> = {
+  params: "Params",
+  headers: "Headers",
+  auth: "Auth",
+  body: "Body",
+  tests: "Tests",
+  capture: "Capture",
+  settings: "Settings",
+};
+
+/** Count badge (key-value tabs), "dot" (configured on/off tabs), or null. */
+export function tabBadge(form: RequestFormData, tab: FormTab): number | "dot" | null {
+  const filled = (rows: KeyValueRow[]) => rows.filter((r) => r.key.trim()).length;
+  switch (tab) {
+    case "params":
+      return filled(form.query);
+    case "headers":
+      return filled(form.headers);
+    case "auth":
+      return form.authType !== "none" ? "dot" : null;
+    case "body":
+      return form.bodyType !== "none" ? "dot" : null;
+    case "tests":
+      return form.tests.length;
+    case "capture":
+      return filled(form.capture);
+    case "settings":
+      return form.timeoutMs.trim() ? "dot" : null;
+  }
+}
 
 function KeyValueEditor({
   rows,
@@ -155,10 +194,12 @@ function TestRowEditor({
   );
 }
 
-export function RequestForm({
+export function RequestFormTab({
+  tab,
   value,
   onChange,
 }: {
+  tab: FormTab;
   value: RequestFormData;
   onChange: (next: RequestFormData) => void;
 }) {
@@ -166,199 +207,195 @@ export function RequestForm({
     onChange({ ...value, [key]: next });
   }
 
-  let jsonBodyError: string | null = null;
-  if (value.bodyType === "json" && value.bodyJsonText.trim()) {
-    try {
-      JSON.parse(value.bodyJsonText);
-    } catch (error) {
-      jsonBodyError = (error as Error).message;
-    }
-  }
-
-  return (
-    <div className="request-form">
-      <p className="hint">
-        Form view understands the standard request fields. Saving from here
-        rewrites the file, so comments or non-standard fields won&apos;t
-        survive — use YAML view if you need those.
-      </p>
-
-      <section>
-        <label className="field">
-          <span>Name</span>
-          <input
-            value={value.name}
-            onChange={(e) => set("name", e.target.value)}
-            placeholder="Shown in the sidebar"
+  switch (tab) {
+    case "params":
+      return (
+        <>
+          <p className="hint">Appended to the URL as a query string, e.g. ?limit=10.</p>
+          <KeyValueEditor
+            rows={value.query}
+            onChange={(rows) => set("query", rows)}
+            keyPlaceholder="Param name"
           />
-        </label>
-        <div className="field-row">
-          <label className="field method-field">
-            <span>Method</span>
-            <select
-              value={value.method}
-              onChange={(e) => set("method", e.target.value as RequestFormData["method"])}
-            >
-              {HTTP_METHODS.map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="field url-field">
-            <span>URL</span>
-            <input
-              value={value.url}
-              onChange={(e) => set("url", e.target.value)}
-              placeholder="{{baseUrl}}/path"
-            />
-          </label>
-        </div>
-        <label className="field">
-          <span>Timeout override (ms, optional)</span>
-          <input
-            value={value.timeoutMs}
-            onChange={(e) => set("timeoutMs", e.target.value)}
-            placeholder="30000"
-          />
-        </label>
-      </section>
+        </>
+      );
 
-      <section>
-        <h3>Headers</h3>
+    case "headers":
+      return (
         <KeyValueEditor
           rows={value.headers}
           onChange={(rows) => set("headers", rows)}
           keyPlaceholder="Header name"
         />
-      </section>
+      );
 
-      <section>
-        <h3>Query parameters</h3>
-        <KeyValueEditor
-          rows={value.query}
-          onChange={(rows) => set("query", rows)}
-          keyPlaceholder="Param name"
-        />
-      </section>
+    case "auth":
+      return (
+        <div className="auth-fields">
+          <select
+            value={value.authType}
+            onChange={(e) => set("authType", e.target.value as RequestFormData["authType"])}
+          >
+            <option value="none">None</option>
+            <option value="bearer">Bearer token</option>
+            <option value="basic">Basic (username/password)</option>
+            <option value="apikey">API key header</option>
+          </select>
+          {value.authType !== "none" && (
+            <p className="hint">
+              Use <code>{"{{$env.NAME}}"}</code> for secrets — they resolve from OS
+              environment variables and never land in Git.
+            </p>
+          )}
+          {value.authType === "bearer" && (
+            <input
+              placeholder="{{$env.API_TOKEN}}"
+              value={value.authBearerToken}
+              onChange={(e) => set("authBearerToken", e.target.value)}
+            />
+          )}
+          {value.authType === "basic" && (
+            <div className="field-row">
+              <input
+                placeholder="Username"
+                value={value.authBasicUsername}
+                onChange={(e) => set("authBasicUsername", e.target.value)}
+              />
+              <input
+                placeholder="Password"
+                value={value.authBasicPassword}
+                onChange={(e) => set("authBasicPassword", e.target.value)}
+              />
+            </div>
+          )}
+          {value.authType === "apikey" && (
+            <div className="field-row">
+              <input
+                placeholder="Header name"
+                value={value.authApiKeyHeader}
+                onChange={(e) => set("authApiKeyHeader", e.target.value)}
+              />
+              <input
+                placeholder="Value"
+                value={value.authApiKeyValue}
+                onChange={(e) => set("authApiKeyValue", e.target.value)}
+              />
+            </div>
+          )}
+        </div>
+      );
 
-      <section>
-        <h3>Authentication</h3>
-        <select
-          value={value.authType}
-          onChange={(e) => set("authType", e.target.value as RequestFormData["authType"])}
-        >
-          <option value="none">None</option>
-          <option value="bearer">Bearer token</option>
-          <option value="basic">Basic (username/password)</option>
-          <option value="apikey">API key header</option>
-        </select>
-        {value.authType === "bearer" && (
-          <input
-            className="full"
-            placeholder="{{$env.API_TOKEN}}"
-            value={value.authBearerToken}
-            onChange={(e) => set("authBearerToken", e.target.value)}
-          />
-        )}
-        {value.authType === "basic" && (
-          <div className="field-row">
-            <input
-              placeholder="Username"
-              value={value.authBasicUsername}
-              onChange={(e) => set("authBasicUsername", e.target.value)}
-            />
-            <input
-              placeholder="Password"
-              value={value.authBasicPassword}
-              onChange={(e) => set("authBasicPassword", e.target.value)}
-            />
-          </div>
-        )}
-        {value.authType === "apikey" && (
-          <div className="field-row">
-            <input
-              placeholder="Header name"
-              value={value.authApiKeyHeader}
-              onChange={(e) => set("authApiKeyHeader", e.target.value)}
-            />
-            <input
-              placeholder="Value"
-              value={value.authApiKeyValue}
-              onChange={(e) => set("authApiKeyValue", e.target.value)}
-            />
-          </div>
-        )}
-      </section>
-
-      <section>
-        <h3>Body</h3>
-        <select
-          value={value.bodyType}
-          onChange={(e) => set("bodyType", e.target.value as RequestFormData["bodyType"])}
-        >
-          <option value="none">None</option>
-          <option value="json">JSON</option>
-          <option value="text">Plain text</option>
-          <option value="form">Form (application/x-www-form-urlencoded)</option>
-        </select>
-        {value.bodyType === "json" && (
-          <>
+    case "body": {
+      let jsonBodyError: string | null = null;
+      if (value.bodyType === "json" && value.bodyJsonText.trim()) {
+        try {
+          JSON.parse(value.bodyJsonText);
+        } catch (error) {
+          jsonBodyError = (error as Error).message;
+        }
+      }
+      return (
+        <>
+          <select
+            style={{ alignSelf: "flex-start" }}
+            value={value.bodyType}
+            onChange={(e) => set("bodyType", e.target.value as RequestFormData["bodyType"])}
+          >
+            <option value="none">None</option>
+            <option value="json">JSON</option>
+            <option value="text">Plain text</option>
+            <option value="form">Form (application/x-www-form-urlencoded)</option>
+          </select>
+          {value.bodyType === "json" && (
+            <>
+              <textarea
+                className="editor small"
+                spellCheck={false}
+                value={value.bodyJsonText}
+                onChange={(e) => set("bodyJsonText", e.target.value)}
+              />
+              {jsonBodyError && (
+                <div className="field-error">Not valid JSON: {jsonBodyError}</div>
+              )}
+            </>
+          )}
+          {value.bodyType === "text" && (
             <textarea
               className="editor small"
               spellCheck={false}
-              value={value.bodyJsonText}
-              onChange={(e) => set("bodyJsonText", e.target.value)}
+              value={value.bodyPlainText}
+              onChange={(e) => set("bodyPlainText", e.target.value)}
             />
-            {jsonBodyError && <div className="field-error">Not valid JSON: {jsonBodyError}</div>}
-          </>
-        )}
-        {value.bodyType === "text" && (
-          <textarea
-            className="editor small"
-            spellCheck={false}
-            value={value.bodyPlainText}
-            onChange={(e) => set("bodyPlainText", e.target.value)}
-          />
-        )}
-        {value.bodyType === "form" && (
-          <KeyValueEditor rows={value.bodyForm} onChange={(rows) => set("bodyForm", rows)} />
-        )}
-      </section>
+          )}
+          {value.bodyType === "form" && (
+            <KeyValueEditor rows={value.bodyForm} onChange={(rows) => set("bodyForm", rows)} />
+          )}
+        </>
+      );
+    }
 
-      <section>
-        <h3>Tests</h3>
-        <p className="hint">
-          Values are JSON: numbers, true/false, &quot;quoted strings&quot;, or
-          [1,2]. Plain text without quotes is treated as a string.
-        </p>
-        {value.tests.map((row, i) => (
-          <TestRowEditor
-            key={i}
-            row={row}
-            onChange={(next) => set("tests", value.tests.map((r, idx) => (idx === i ? next : r)))}
-            onRemove={() => set("tests", value.tests.filter((_, idx) => idx !== i))}
-          />
-        ))}
-        <button className="add-row" onClick={() => set("tests", [...value.tests, newTestRow("status")])}>
-          + Add test
-        </button>
-      </section>
+    case "tests":
+      return (
+        <>
+          <p className="hint">
+            Run after every send. Values are JSON: numbers, true/false,
+            &quot;quoted strings&quot;, or [1,2]. Plain text without quotes is
+            treated as a string.
+          </p>
+          {value.tests.map((row, i) => (
+            <TestRowEditor
+              key={i}
+              row={row}
+              onChange={(next) =>
+                set("tests", value.tests.map((r, idx) => (idx === i ? next : r)))
+              }
+              onRemove={() => set("tests", value.tests.filter((_, idx) => idx !== i))}
+            />
+          ))}
+          <button
+            className="add-row"
+            onClick={() => set("tests", [...value.tests, newTestRow("status")])}
+          >
+            + Add test
+          </button>
+        </>
+      );
 
-      <section>
-        <h3>Capture variables</h3>
-        <p className="hint">
-          Save a value from the response for later requests, e.g.{" "}
-          <code>authToken</code> → <code>$.token</code>
-        </p>
-        <KeyValueEditor
-          rows={value.capture}
-          onChange={(rows) => set("capture", rows)}
-          keyPlaceholder="Variable name"
-          valuePlaceholder="$.path.to.value"
-        />
-      </section>
-    </div>
-  );
+    case "capture":
+      return (
+        <>
+          <p className="hint">
+            Save a value from the response for later requests, e.g.{" "}
+            <code>authToken</code> → <code>$.token</code>. Captured variables
+            work like <code>{"{{authToken}}"}</code> in any later request in the
+            run.
+          </p>
+          <KeyValueEditor
+            rows={value.capture}
+            onChange={(rows) => set("capture", rows)}
+            keyPlaceholder="Variable name"
+            valuePlaceholder="$.path.to.value"
+          />
+        </>
+      );
+
+    case "settings":
+      return (
+        <div className="settings-fields">
+          <label className="field">
+            <span>Timeout override (ms, optional)</span>
+            <input
+              value={value.timeoutMs}
+              onChange={(e) => set("timeoutMs", e.target.value)}
+              placeholder="30000"
+            />
+          </label>
+          <p className="hint" style={{ marginTop: "0.6rem" }}>
+            Saving from Form view rewrites the file, so YAML comments or
+            non-standard fields won&apos;t survive — use YAML view if you need
+            those.
+          </p>
+        </div>
+      );
+  }
 }

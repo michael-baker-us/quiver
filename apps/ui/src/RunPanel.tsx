@@ -3,9 +3,11 @@ import { MethodBadge } from "./Sidebar.js";
 
 export function RunPanel({
   events,
+  running,
   onClose,
 }: {
   events: RunEvent[];
+  running: boolean;
   onClose: () => void;
 }) {
   const results = events.filter((e) => e.type === "result");
@@ -16,14 +18,15 @@ export function RunPanel({
       <div className="panel-header">
         <strong>Run results</strong>
         <span className="spacer" />
-        <button onClick={onClose}>Close</button>
+        <button className="ghost" onClick={onClose}>
+          Close
+        </button>
       </div>
       <ul className="run-results">
         {results.map((result) => (
           <li key={result.relativePath} className={result.passed ? "pass" : "fail"}>
-            <div>
-              {result.passed ? "✓" : "✗"} <MethodBadge method={result.method} />{" "}
-              {result.name}
+            <div className="result-name">
+              <MethodBadge method={result.method} /> {result.name}
               {result.response && (
                 <span className="time">
                   {" "}
@@ -43,6 +46,7 @@ export function RunPanel({
                 ))}
           </li>
         ))}
+        {running && <li className="run-running">Running…</li>}
       </ul>
       {summary && summary.type === "summary" && (
         <div className={`run-summary ${summary.failed > 0 ? "fail" : "pass"}`}>

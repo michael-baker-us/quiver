@@ -213,15 +213,21 @@ same YAML files on disk, so every change made in the UI shows up in
 UI cannot produce a file the CLI would reject. The server binds to 127.0.0.1
 only.
 
-The **📖 Guide** button in the top bar opens built-in documentation covering
+The layout follows the conventions Postman users already know: method + URL
++ Send in a bar at the top, with Params / Headers / Auth / Body / Tests /
+Capture tabs below it and the response docked underneath (status, time,
+size, assertion results, syntax-highlighted JSON). The sidebar has a filter
+box and collapsible folders; light and dark themes follow the OS with a
+manual toggle. `⌘+Enter` sends, `⌘+S` saves.
+
+The **Guide** button in the top bar opens built-in documentation covering
 the request format, variables, secrets, every assertion type, and
 capture-based chaining — written for non-technical users, no README required.
 
-Each request has two interchangeable views: **Form** (dropdowns, key-value
-rows, a structured test builder — no YAML knowledge needed) and **YAML** (the
-raw file text). Both edit the same file; switching or saving from Form view
-rewrites the file from its fields, so comments or non-standard fields only
-survive while you stay in YAML view.
+Each request has two interchangeable views: **Form** (the tabbed editor — no
+YAML knowledge needed) and **YAML** (the raw file text). Both edit the same
+file; switching or saving from Form view rewrites the file from its fields,
+so comments or non-standard fields only survive while you stay in YAML view.
 
 For UI development: `quiver ui <dir> --port 4123 --no-open` in one terminal,
 `npm -w @quiver/ui run dev` (Vite with `/api` proxy) in another.
