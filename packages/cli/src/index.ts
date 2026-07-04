@@ -2,11 +2,14 @@
 import path from "node:path";
 import { Command } from "commander";
 import pc from "picocolors";
+import { mkdir, readdir, writeFile } from "node:fs/promises";
 import {
   findCollectionRoot,
+  importOpenApi,
   listEnvironments,
   loadCollection,
   loadEnvironment,
+  loadOpenApiFile,
   loadRequestFile,
   runCollection,
   runRequest,
@@ -139,6 +142,43 @@ program
       console.log(`\nEnvironments: ${environments.join(", ")}`);
     }
   });
+
+program
+  .command("import")
+  .description("Generate a collection from an OpenAPI 3.x spec")
+  .argument("<spec>", "path to an OpenAPI YAML or JSON file")
+  .requiredOption("-o, --out <dir>", "directory to create the collection in")
+  .option("-f, --force", "write into a non-empty directory")
+  .action(
+    async (specPath: string, options: { out: string; force?: boolean }) => {
+      const spec = await loadOpenApiFile(specPath);
+      const result = importOpenApi(spec);
+
+      await mkdir(options.out, { recursive: true });
+      const existing = await readdir(options.out);
+      if (existing.length > 0 && !options.force) {
+        fail(`${options.out} is not empty — use --force to write anyway`);
+      }
+
+      for (const [relativePath, content] of result.files) {
+        const target = path.join(options.out, relativePath);
+        await mkdir(path.dirname(target), { recursive: true });
+        await writeFile(target, content);
+        console.log(`  ${pc.green("created")} ${target}`);
+      }
+      console.log(
+        `\nImported ${pc.bold(result.collectionName)}: ${result.files.size - 2} requests`,
+      );
+      for (const warning of result.warnings) {
+        console.log(pc.yellow(`  warning: ${warning}`));
+      }
+      console.log(
+        pc.dim(
+          `\nNext: review ${path.join(options.out, "environments/default.yaml")}, then run:\n  quiver run ${options.out} --env default`,
+        ),
+      );
+    },
+  );
 
 program.parseAsync().catch((error: unknown) => {
   fail(error instanceof Error ? error.message : String(error));

@@ -23,6 +23,9 @@ node packages/cli/dist/index.js send examples/demo-api/users/01-list-users.reque
 
 # See what's in a collection
 node packages/cli/dist/index.js list examples/demo-api
+
+# Generate a collection from an OpenAPI 3.x spec
+node packages/cli/dist/index.js import openapi.yaml --out collections/my-api
 ```
 
 ## Collection format
@@ -31,7 +34,7 @@ A collection is a directory containing `collection.yaml`. Every
 `*.request.yaml` beneath it is a request; requests run in path order, so
 numeric prefixes (`01-login.request.yaml`) control sequencing.
 
-```
+```text
 my-api/
 ├── collection.yaml            # name + shared defaults
 ├── environments/
@@ -98,12 +101,34 @@ variables:
 
 JSONPath support is the practical subset: `$.a.b`, `$[0]`, `$["key with spaces"]`.
 
+## Importing an OpenAPI spec
+
+```bash
+quiver import openapi.yaml --out collections/my-api
+```
+
+Generates one request file per operation, grouped by tag, with:
+
+- example request bodies synthesized from the JSON schemas (`example` /
+  `default` / `enum` values win when present)
+- path and query params filled from examples, or left as `{{param}}`
+  placeholders that fail loudly until you supply a value
+- security schemes mapped to auth blocks referencing `{{$env.*}}` — imported
+  collections never contain literal secrets
+- a status + content-type assertion per request, derived from the spec's
+  `responses`
+
+The importer prints warnings for anything it can't map (OAuth2 flows,
+non-JSON bodies, missing server URLs) instead of guessing. OpenAPI 3.x only;
+convert Swagger 2.0 specs first (e.g. `npx swagger2openapi`).
+
 ## CLI
 
-```
-quiver send <file>  [--env <name>] [--verbose]
-quiver run  <dir>   [--env <name>] [--bail] [--reporter pretty|json] [--verbose]
-quiver list <dir>
+```text
+quiver send   <file>  [--env <name>] [--verbose]
+quiver run    <dir>   [--env <name>] [--bail] [--reporter pretty|json] [--verbose]
+quiver list   <dir>
+quiver import <spec>  --out <dir> [--force]
 ```
 
 Exit codes: `0` all passed, `1` failures, `2` usage/config error — safe to
@@ -116,7 +141,7 @@ drop straight into CI:
 
 ## Architecture
 
-```
+```text
 packages/
 ├── core/   # engine: schema (zod), loader, {{var}} resolution, HTTP
 │           # execution, assertions, runner. No CLI or UI dependencies.
@@ -131,7 +156,7 @@ that discipline is what keeps the GUI and CLI behavior identical.
 
 - [x] **M1 — engine + CLI runner**: YAML collection format, environments,
       secrets via `$env`, assertions, capture/chaining, pretty + JSON reporters
-- [ ] **M2 — OpenAPI import**: generate a collection skeleton from a spec
+- [x] **M2 — OpenAPI import**: generate a collection skeleton from a spec
 - [ ] **M3 — web UI**: `quiver ui` opens a local app; reads/writes the same
       YAML files, aimed at non-technical teammates
 - [ ] **M4 — integrations**: JUnit XML reporter (Jenkins/GitLab), HTML report,

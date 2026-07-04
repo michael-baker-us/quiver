@@ -5,3 +5,6 @@ export * from "./http.js";
 export * from "./assertions.js";
 export * from "./loader.js";
 export * from "./runner.js";
+export * from "./openapi/deref.js";
+export * from "./openapi/example.js";
+export * from "./openapi/import.js";

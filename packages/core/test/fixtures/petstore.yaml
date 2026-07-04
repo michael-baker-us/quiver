@@ -1,0 +1,122 @@
+openapi: "3.0.3"
+info:
+  title: Petstore
+  description: Test fixture exercising refs, allOf, params, and security.
+servers:
+  - url: https://petstore.example.com/v2/
+security:
+  - bearerAuth: []
+paths:
+  /pets:
+    get:
+      operationId: listPets
+      summary: List pets
+      tags: [pets]
+      parameters:
+        - name: limit
+          in: query
+          required: true
+          schema:
+            type: integer
+            example: 20
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Pet"
+    post:
+      operationId: createPet
+      summary: Create a pet
+      tags: [pets]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NewPet"
+      responses:
+        "201":
+          description: created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Pet"
+  /pets/{petId}:
+    parameters:
+      - name: petId
+        in: path
+        required: true
+        schema:
+          type: integer
+          example: 7
+    get:
+      operationId: getPetById
+      summary: Get a pet
+      tags: [pets]
+      responses:
+        "200":
+          description: ok
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Pet"
+  /store/orders:
+    post:
+      # no operationId, no tags — exercises the fallback naming/grouping
+      security:
+        - apiKeyAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                petId:
+                  type: integer
+                shipDate:
+                  type: string
+                  format: date-time
+      responses:
+        "201":
+          description: created
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+  schemas:
+    NewPet:
+      type: object
+      properties:
+        name:
+          type: string
+          example: doggie
+        category:
+          $ref: "#/components/schemas/Category"
+    Pet:
+      allOf:
+        - $ref: "#/components/schemas/NewPet"
+        - type: object
+          properties:
+            id:
+              type: integer
+    Category:
+      type: object
+      properties:
+        name:
+          type: string
+          enum: [dogs, cats]
+        parent:
+          $ref: "#/components/schemas/Category"
