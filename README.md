@@ -161,6 +161,12 @@ The **📖 Guide** button in the top bar opens built-in documentation covering
 the request format, variables, secrets, every assertion type, and
 capture-based chaining — written for non-technical users, no README required.
 
+Each request has two interchangeable views: **Form** (dropdowns, key-value
+rows, a structured test builder — no YAML knowledge needed) and **YAML** (the
+raw file text). Both edit the same file; switching or saving from Form view
+rewrites the file from its fields, so comments or non-standard fields only
+survive while you stay in YAML view.
+
 For UI development: `quiver ui <dir> --port 4123 --no-open` in one terminal,
 `npm -w @quiver/ui run dev` (Vite with `/api` proxy) in another.
 
@@ -190,9 +196,10 @@ that discipline is what keeps the GUI and CLI behavior identical.
       YAML files, aimed at non-technical teammates
 - [ ] **M4 — integrations**: JUnit XML reporter (Jenkins/GitLab), HTML report,
       GitHub Action, k6 script export
-- [ ] Later: form-based request editor in the UI, new-request/delete from the
-      UI, cookies/sessions, file upload, request scripts, parallel runs,
-      watch mode
+- [x] Form-based request editor in the UI (alongside YAML view)
+- [ ] Later: delete/rename requests from the UI, cookies/sessions, file
+      upload, request scripts, parallel runs, watch mode (auto-refresh on
+      external file changes)
 
 ## Development
 

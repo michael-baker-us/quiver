@@ -23,6 +23,15 @@ export function Docs() {
         save.
       </p>
       <p>
+        Every request has two views, switchable at the top of the panel:{" "}
+        <strong>Form</strong> — dropdowns and fields, no YAML knowledge
+        needed — and <strong>YAML</strong> — the raw file text, for anyone
+        who prefers it or needs something the form doesn&apos;t expose. They
+        edit the same file; switching or saving from Form view rewrites the
+        file from its fields, so any comments or unusual formatting only
+        survive while you stay in YAML view.
+      </p>
+      <p>
         Requests run in alphabetical order when you <strong>Run all</strong>,
         so use numeric prefixes when order matters:{" "}
         <code>01-login</code>, <code>02-create-order</code>.

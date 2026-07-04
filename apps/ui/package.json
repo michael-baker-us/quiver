@@ -9,7 +9,8 @@
   },
   "dependencies": {
     "react": "^18.3.0",
-    "react-dom": "^18.3.0"
+    "react-dom": "^18.3.0",
+    "yaml": "^2.5.0"
   },
   "devDependencies": {
     "@quiver/core": "^0.1.0",

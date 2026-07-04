@@ -245,6 +245,153 @@ textarea.editor {
   white-space: pre-wrap;
 }
 
+/* ---- mode toggle (reuses tab styling) ---- */
+.mode-toggle {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.mode-toggle button {
+  border: none;
+  background: none;
+  color: var(--text-dim);
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  padding: 0.25rem 0.5rem;
+}
+
+.mode-toggle button.active {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+}
+
+.mode-toggle button:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+/* ---- form editor ---- */
+.request-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  overflow-y: auto;
+  padding-bottom: 1rem;
+}
+
+.request-form section {
+  border-top: 1px solid var(--border);
+  padding-top: 0.6rem;
+  margin-top: 0.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.request-form h3 {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  flex: 1;
+}
+
+.field > span {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+
+.field-row {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.method-field {
+  flex: 0 0 7rem;
+}
+
+.url-field {
+  flex: 1;
+}
+
+input,
+textarea,
+select {
+  font: inherit;
+  padding: 0.35rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.field-error {
+  color: var(--fail);
+  font-size: 0.85rem;
+}
+
+.kv-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.kv-row {
+  display: flex;
+  gap: 0.4rem;
+}
+
+.kv-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.icon-button {
+  border: none;
+  background: none;
+  color: var(--text-dim);
+  padding: 0.2rem 0.4rem;
+}
+
+.icon-button:hover {
+  color: var(--fail);
+}
+
+.add-row {
+  align-self: flex-start;
+  border-style: dashed;
+  color: var(--text-dim);
+}
+
+.add-row:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.test-row {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.test-row input,
+.test-row select {
+  flex: 1;
+  min-width: 6rem;
+}
+
+.editor.small {
+  min-height: 100px;
+}
+
 /* ---- response ---- */
 .response {
   border-top: 1px solid var(--border);
