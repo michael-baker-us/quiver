@@ -10,10 +10,15 @@ import { ResponsePane } from "./ResponsePane.js";
 export function RequestPanel({
   relativePath,
   env,
+  isNew,
+  template,
   onSaved,
 }: {
   relativePath: string;
   env: string | undefined;
+  /** True for a request that has never been saved — starts from the template. */
+  isNew: boolean;
+  template: string;
   onSaved: () => void;
 }) {
   const [content, setContent] = useState<string | null>(null);
@@ -23,13 +28,20 @@ export function RequestPanel({
   const [result, setResult] = useState<SendResult | null>(null);
 
   useEffect(() => {
+    if (isNew) {
+      setContent(template);
+      setSavedContent(null); // never saved → always dirty until first save
+      return;
+    }
     getRequestFile(relativePath)
       .then((text) => {
         setContent(text);
         setSavedContent(text);
       })
       .catch((error: Error) => setProblem(error.message));
-  }, [relativePath]);
+    // isNew only ever flips true→false after the first save, when the file
+    // exists and this fetch returns what was just written.
+  }, [relativePath, isNew, template]);
 
   const dirty = content !== null && content !== savedContent;
 

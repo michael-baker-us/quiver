@@ -150,11 +150,16 @@ npm run build:ui          # one-time (and after UI changes)
 quiver ui my-api          # opens http://127.0.0.1:4123
 ```
 
-A local web app for browsing, editing, sending, and running the collection —
-aimed at teammates who won't touch a terminal. It edits the same YAML files
-on disk, so every change made in the UI shows up in `git diff`. Saves are
-validated against the request schema server-side; the UI cannot produce a
-file the CLI would reject. The server binds to 127.0.0.1 only.
+A local web app for browsing, creating, editing, sending, and running the
+collection — aimed at teammates who won't touch a terminal. It edits the
+same YAML files on disk, so every change made in the UI shows up in
+`git diff`. Saves are validated against the request schema server-side; the
+UI cannot produce a file the CLI would reject. The server binds to 127.0.0.1
+only.
+
+The **📖 Guide** button in the top bar opens built-in documentation covering
+the request format, variables, secrets, every assertion type, and
+capture-based chaining — written for non-technical users, no README required.
 
 For UI development: `quiver ui <dir> --port 4123 --no-open` in one terminal,
 `npm -w @quiver/ui run dev` (Vite with `/api` proxy) in another.

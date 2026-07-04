@@ -8,12 +8,34 @@ import {
 import { Sidebar } from "./Sidebar.js";
 import { RequestPanel } from "./RequestPanel.js";
 import { RunPanel } from "./RunPanel.js";
+import { Docs } from "./Docs.js";
+
+const NEW_REQUEST_TEMPLATE = `name: My new request
+method: GET
+url: "{{baseUrl}}/change-me"
+tests:
+  - status: 200
+`;
+
+/** Normalizes user input like "users/create user" to a valid request path. */
+function toRequestPath(input: string): string | null {
+  const cleaned = input
+    .trim()
+    .replace(/^[/.]+/, "")
+    .replace(/\.request\.ya?ml$/i, "")
+    .replace(/\.ya?ml$/i, "")
+    .replace(/\s+/g, "-");
+  if (!cleaned || cleaned.includes("..")) return null;
+  return `${cleaned}.request.yaml`;
+}
 
 export function App() {
   const [collection, setCollection] = useState<CollectionInfo | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [env, setEnv] = useState<string | undefined>(undefined);
   const [selected, setSelected] = useState<string | null>(null);
+  const [draft, setDraft] = useState<string | null>(null);
+  const [showDocs, setShowDocs] = useState(false);
   const [runEvents, setRunEvents] = useState<RunEvent[] | null>(null);
   const [running, setRunning] = useState(false);
 
@@ -30,6 +52,23 @@ export function App() {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  function handleNewRequest() {
+    const input = window.prompt(
+      "Path for the new request (folders group requests, e.g. users/create-user):",
+    );
+    if (!input) return;
+    const path = toRequestPath(input);
+    if (!path) return;
+    setDraft(path);
+    setSelected(path);
+    setShowDocs(false);
+  }
+
+  function handleSelect(path: string) {
+    setSelected(path);
+    setShowDocs(false);
+  }
 
   async function handleRunAll() {
     setRunning(true);
@@ -60,6 +99,9 @@ export function App() {
         <span className="brand">quiver</span>
         <span className="collection-name">{collection.name}</span>
         <span className="spacer" />
+        <button onClick={() => setShowDocs((v) => !v)}>
+          {showDocs ? "Close guide" : "📖 Guide"}
+        </button>
         {collection.environments.length > 0 && (
           <label className="env-picker">
             env
@@ -72,11 +114,7 @@ export function App() {
             </select>
           </label>
         )}
-        <button
-          className="primary"
-          onClick={handleRunAll}
-          disabled={running}
-        >
+        <button className="primary" onClick={handleRunAll} disabled={running}>
           {running ? "Running…" : "▶ Run all"}
         </button>
       </header>
@@ -84,19 +122,32 @@ export function App() {
         <Sidebar
           requests={collection.requests}
           selected={selected}
-          onSelect={setSelected}
+          draft={draft}
+          onSelect={handleSelect}
+          onNew={handleNewRequest}
         />
         <main className="main">
-          {selected ? (
+          {showDocs ? (
+            <Docs />
+          ) : selected ? (
             <RequestPanel
               key={selected}
               relativePath={selected}
               env={env}
-              onSaved={refresh}
+              isNew={selected === draft}
+              template={NEW_REQUEST_TEMPLATE}
+              onSaved={() => {
+                setDraft((d) => (d === selected ? null : d));
+                refresh();
+              }}
             />
           ) : (
             <div className="empty">
               <p>Select a request on the left to view, edit, and send it.</p>
+              <p className="hint">
+                New here? Open the <button className="link" onClick={() => setShowDocs(true)}>guide</button>{" "}
+                for a walkthrough of requests, variables, and tests.
+              </p>
               <p className="hint">
                 Requests are plain YAML files in your Git repository — anything
                 you save here shows up in <code>git diff</code>.
