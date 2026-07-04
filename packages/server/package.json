@@ -1,0 +1,21 @@
+{
+  "name": "@quiver/server",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "public"
+  ],
+  "scripts": {
+    "build": "tsc -b"
+  },
+  "dependencies": {
+    "@quiver/core": "^0.1.0",
+    "yaml": "^2.5.0"
+  }
+}

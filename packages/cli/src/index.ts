@@ -2,7 +2,9 @@
 import path from "node:path";
 import { Command } from "commander";
 import pc from "picocolors";
+import { spawn } from "node:child_process";
 import { mkdir, readdir, writeFile } from "node:fs/promises";
+import { startUiServer } from "@quiver/server";
 import {
   findCollectionRoot,
   importOpenApi,
@@ -179,6 +181,33 @@ program
       );
     },
   );
+
+program
+  .command("ui")
+  .description("Open the collection in the local web UI")
+  .argument("<dir>", "collection directory (contains collection.yaml)")
+  .option("-p, --port <port>", "port to listen on", "4123")
+  .option("--no-open", "do not open the browser automatically")
+  .action(async (dir: string, options: { port: string; open: boolean }) => {
+    await loadCollection(dir); // fail fast on a broken collection
+    const { url } = await startUiServer({
+      rootDir: dir,
+      port: Number(options.port),
+    });
+    console.log(`quiver ui running at ${pc.bold(url)} — Ctrl-C to stop`);
+    if (options.open) {
+      const opener =
+        process.platform === "darwin"
+          ? "open"
+          : process.platform === "win32"
+            ? "start"
+            : "xdg-open";
+      spawn(opener, [url], { stdio: "ignore", detached: true }).on(
+        "error",
+        () => {},
+      );
+    }
+  });
 
 program.parseAsync().catch((error: unknown) => {
   fail(error instanceof Error ? error.message : String(error));

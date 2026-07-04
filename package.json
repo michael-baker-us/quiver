@@ -3,10 +3,12 @@
   "private": true,
   "type": "module",
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "apps/*"
   ],
   "scripts": {
-    "build": "tsc -b packages/core packages/cli",
+    "build": "tsc -b packages/core packages/cli packages/server",
+    "build:ui": "npm -w @quiver/ui run build",
     "test": "vitest run",
     "test:watch": "vitest",
     "clean": "rm -rf packages/*/dist packages/*/tsconfig.tsbuildinfo"

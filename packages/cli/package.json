@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@quiver/core": "^0.1.0",
+    "@quiver/server": "^0.1.0",
     "commander": "^12.1.0",
     "picocolors": "^1.1.0"
   }

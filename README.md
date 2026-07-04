@@ -26,6 +26,9 @@ node packages/cli/dist/index.js list examples/demo-api
 
 # Generate a collection from an OpenAPI 3.x spec
 node packages/cli/dist/index.js import openapi.yaml --out collections/my-api
+
+# Open the point-and-click web UI (build it once with: npm run build:ui)
+node packages/cli/dist/index.js ui examples/demo-api
 ```
 
 ## Collection format
@@ -129,6 +132,7 @@ quiver send   <file>  [--env <name>] [--verbose]
 quiver run    <dir>   [--env <name>] [--bail] [--reporter pretty|json] [--verbose]
 quiver list   <dir>
 quiver import <spec>  --out <dir> [--force]
+quiver ui     <dir>   [--port <port>] [--no-open]
 ```
 
 Exit codes: `0` all passed, `1` failures, `2` usage/config error — safe to
@@ -139,13 +143,33 @@ drop straight into CI:
 - run: node packages/cli/dist/index.js run collections/my-api --env ci --reporter json
 ```
 
+## Web UI
+
+```bash
+npm run build:ui          # one-time (and after UI changes)
+quiver ui my-api          # opens http://127.0.0.1:4123
+```
+
+A local web app for browsing, editing, sending, and running the collection —
+aimed at teammates who won't touch a terminal. It edits the same YAML files
+on disk, so every change made in the UI shows up in `git diff`. Saves are
+validated against the request schema server-side; the UI cannot produce a
+file the CLI would reject. The server binds to 127.0.0.1 only.
+
+For UI development: `quiver ui <dir> --port 4123 --no-open` in one terminal,
+`npm -w @quiver/ui run dev` (Vite with `/api` proxy) in another.
+
 ## Architecture
 
 ```text
 packages/
-├── core/   # engine: schema (zod), loader, {{var}} resolution, HTTP
-│           # execution, assertions, runner. No CLI or UI dependencies.
-└── cli/    # thin client of core: commands + reporters
+├── core/    # engine: schema (zod), loader, {{var}} resolution, HTTP
+│            # execution, assertions, runner, OpenAPI import.
+│            # No CLI or UI dependencies.
+├── cli/     # thin client of core: commands + reporters
+└── server/  # local HTTP server: JSON API over core + hosts the built UI
+apps/
+└── ui/      # React frontend (Vite); builds into packages/server/public
 ```
 
 The core package is the product; the CLI (and the future web UI) are thin
@@ -157,11 +181,12 @@ that discipline is what keeps the GUI and CLI behavior identical.
 - [x] **M1 — engine + CLI runner**: YAML collection format, environments,
       secrets via `$env`, assertions, capture/chaining, pretty + JSON reporters
 - [x] **M2 — OpenAPI import**: generate a collection skeleton from a spec
-- [ ] **M3 — web UI**: `quiver ui` opens a local app; reads/writes the same
+- [x] **M3 — web UI**: `quiver ui` opens a local app; reads/writes the same
       YAML files, aimed at non-technical teammates
 - [ ] **M4 — integrations**: JUnit XML reporter (Jenkins/GitLab), HTML report,
       GitHub Action, k6 script export
-- [ ] Later: cookies/sessions, file upload, request scripts, parallel runs,
+- [ ] Later: form-based request editor in the UI, new-request/delete from the
+      UI, cookies/sessions, file upload, request scripts, parallel runs,
       watch mode
 
 ## Development
