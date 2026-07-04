@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildHtmlReport, buildJunitXml, type JsonSummary } from "../src/reporter.js";
+import { buildHtmlReport, buildJunitXml, isJsonSummary, type JsonSummary } from "../src/report.js";
 
 const summary: JsonSummary = {
   passed: 1,
@@ -75,6 +75,16 @@ describe("buildJunitXml", () => {
     const opens = (xml.match(/<testsuite(?!s)/g) ?? []).length;
     const closes = (xml.match(/<\/testsuite>/g) ?? []).length;
     expect(opens).toBe(closes);
+  });
+});
+
+describe("isJsonSummary", () => {
+  it("accepts a real summary and rejects near-misses", () => {
+    expect(isJsonSummary(summary)).toBe(true);
+    expect(isJsonSummary(null)).toBe(false);
+    expect(isJsonSummary("string")).toBe(false);
+    expect(isJsonSummary({ passed: 1, failed: 0 })).toBe(false);
+    expect(isJsonSummary({ passed: "1", failed: 0, durationMs: 5, results: [] })).toBe(false);
   });
 });
 

@@ -4,6 +4,9 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse as parseYaml } from "yaml";
 import {
+  buildHtmlReport,
+  buildJunitXml,
+  isJsonSummary,
   listEnvironments,
   loadCollection,
   loadEnvironment,
@@ -234,6 +237,35 @@ async function handleApi(
         durationMs: Math.round(summary.durationMs),
       }) + "\n",
     );
+    return;
+  }
+
+  // Formats a run the client already has (from the /api/run stream) as
+  // junit or html — stateless, mirroring the CLI's `quiver report`, so the
+  // collection never has to be executed a second time to get a report.
+  if (route === "POST /api/report") {
+    const body = (await readBody(req)) as {
+      format?: unknown;
+      name?: unknown;
+      summary?: unknown;
+    };
+    if (body.format !== "junit" && body.format !== "html") {
+      throw new HttpError(400, 'Expected format: "junit" or "html"');
+    }
+    if (!isJsonSummary(body.summary)) {
+      throw new HttpError(
+        400,
+        "Expected summary: { passed, failed, durationMs, results[] }",
+      );
+    }
+    if (body.format === "junit") {
+      res.writeHead(200, { "content-type": "application/xml; charset=utf-8" });
+      res.end(buildJunitXml(body.summary));
+    } else {
+      const name = typeof body.name === "string" ? body.name : "quiver run";
+      res.writeHead(200, { "content-type": "text/html; charset=utf-8" });
+      res.end(buildHtmlReport(body.summary, name));
+    }
     return;
   }
 

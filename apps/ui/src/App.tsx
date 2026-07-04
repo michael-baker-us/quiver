@@ -165,6 +165,7 @@ export function App() {
           <RunPanel
             events={runEvents}
             running={running}
+            collectionName={collection.name}
             onClose={() => setRunEvents(null)}
           />
         )}

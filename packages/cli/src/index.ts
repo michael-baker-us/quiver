@@ -6,9 +6,12 @@ import { spawn } from "node:child_process";
 import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { startUiServer } from "@quiver/server";
 import {
+  buildHtmlReport,
+  buildJunitXml,
   exportK6,
   findCollectionRoot,
   importOpenApi,
+  isJsonSummary,
   listEnvironments,
   loadCollection,
   loadEnvironment,
@@ -16,16 +19,10 @@ import {
   loadRequestFile,
   runCollection,
   runRequest,
+  toJsonSummary,
   type RunSummary,
 } from "@quiver/core";
-import {
-  buildHtmlReport,
-  buildJunitXml,
-  reportResult,
-  reportSummary,
-  toJsonSummary,
-  type JsonSummary,
-} from "./reporter.js";
+import { reportResult, reportSummary } from "./reporter.js";
 
 const BATCH_REPORTERS = ["json", "junit", "html"] as const;
 type BatchReporter = (typeof BATCH_REPORTERS)[number];
@@ -185,14 +182,14 @@ program
     } catch {
       return fail(`${file} not found or unreadable`);
     }
-    let data: JsonSummary;
+    let data: unknown;
     try {
-      data = JSON.parse(raw) as JsonSummary;
+      data = JSON.parse(raw);
     } catch {
       return fail(`${file} is not valid JSON`);
     }
-    if (typeof data.passed !== "number" || !Array.isArray(data.results)) {
-      fail(`${file} doesn't look like a quiver JSON run report`);
+    if (!isJsonSummary(data)) {
+      return fail(`${file} doesn't look like a quiver JSON run report`);
     }
     const text = options.format === "junit" ? buildJunitXml(data) : buildHtmlReport(data, options.name);
     if (options.output) {

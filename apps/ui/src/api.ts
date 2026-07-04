@@ -37,6 +37,50 @@ export type RunEvent =
   | ({ type: "result" } & SendResult)
   | { type: "summary"; passed: number; failed: number; durationMs: number };
 
+/** The JsonSummary shape the server's /api/report endpoint expects. */
+export interface RunReportPayload {
+  passed: number;
+  failed: number;
+  durationMs: number;
+  results: {
+    name: string;
+    file: string;
+    method: string;
+    passed: boolean;
+    error?: string;
+    status?: number;
+    timeMs?: number;
+    assertions: { ok: boolean; description: string; detail?: string }[];
+  }[];
+}
+
+/** Folds a finished run's streamed events into a report payload; null until the summary arrives. */
+export function summarizeRunEvents(events: RunEvent[]): RunReportPayload | null {
+  const summary = events.find((e) => e.type === "summary");
+  if (!summary || summary.type !== "summary" || summary.failed < 0) return null;
+  return {
+    passed: summary.passed,
+    failed: summary.failed,
+    durationMs: summary.durationMs,
+    results: events
+      .filter((e) => e.type === "result")
+      .map((result) => ({
+        name: result.name,
+        file: result.relativePath,
+        method: result.method,
+        passed: result.passed,
+        error: result.error,
+        status: result.response?.status,
+        timeMs: result.response?.timeMs,
+        assertions: result.assertions.map((a) => ({
+          ok: a.ok,
+          description: a.description,
+          detail: a.detail,
+        })),
+      })),
+  };
+}
+
 async function checkOk(res: Response): Promise<Response> {
   if (res.ok) return res;
   let message = `${res.status} ${res.statusText}`;
@@ -85,6 +129,21 @@ export async function sendRequest(
     }),
   );
   return (await res.json()) as SendResult;
+}
+
+/** Asks the server to format an already-finished run — never re-executes it. */
+export async function fetchReport(
+  format: "junit" | "html",
+  name: string,
+  summary: RunReportPayload,
+): Promise<string> {
+  const res = await checkOk(
+    await fetch("/api/report", {
+      method: "POST",
+      body: JSON.stringify({ format, name, summary }),
+    }),
+  );
+  return await res.text();
 }
 
 /** Streams NDJSON run events; onEvent fires as each request finishes. */

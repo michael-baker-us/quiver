@@ -222,6 +222,11 @@ stacked and side-by-side layouts. The sidebar has a filter box and
 collapsible folders; light and dark themes follow the OS with a manual
 toggle. `⌘+Enter` sends, `⌘+S` saves.
 
+After a **Run all**, the results panel offers the same JUnit XML and HTML
+reports the CLI produces — generated from the run that just finished (via
+the stateless `POST /api/report` endpoint), never by re-executing the
+collection.
+
 The **Guide** button in the top bar opens built-in documentation covering
 the request format, variables, secrets, every assertion type, and
 capture-based chaining — written for non-technical users, no README required.

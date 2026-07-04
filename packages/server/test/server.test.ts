@@ -182,6 +182,60 @@ describe("ui server API", () => {
     expect(lines[1]).toMatchObject({ type: "summary", passed: 1, failed: 0 });
   });
 
+  it("POST /api/report formats a supplied summary as junit or html without re-running", async () => {
+    const summary = {
+      passed: 1,
+      failed: 1,
+      durationMs: 120,
+      results: [
+        {
+          name: "Get thing",
+          file: "things/get-thing.request.yaml",
+          method: "GET",
+          passed: false,
+          status: 500,
+          timeMs: 40,
+          assertions: [
+            { ok: true, description: "status is 200" },
+            { ok: false, description: "jsonpath $.ok equals", detail: "got false" },
+          ],
+        },
+      ],
+    };
+
+    const junit = await fetch(`${ui.url}/api/report`, {
+      method: "POST",
+      body: JSON.stringify({ format: "junit", summary }),
+    });
+    expect(junit.status).toBe(200);
+    expect(junit.headers.get("content-type")).toContain("application/xml");
+    const xml = await junit.text();
+    expect(xml).toContain("<testsuites");
+    expect(xml).toContain('failures="1"');
+
+    const html = await fetch(`${ui.url}/api/report`, {
+      method: "POST",
+      body: JSON.stringify({ format: "html", name: "Server Test", summary }),
+    });
+    expect(html.status).toBe(200);
+    expect(html.headers.get("content-type")).toContain("text/html");
+    expect(await html.text()).toContain("Server Test — quiver report");
+  });
+
+  it("POST /api/report rejects bad formats and malformed summaries", async () => {
+    const badFormat = await fetch(`${ui.url}/api/report`, {
+      method: "POST",
+      body: JSON.stringify({ format: "pdf", summary: { passed: 0, failed: 0, durationMs: 0, results: [] } }),
+    });
+    expect(badFormat.status).toBe(400);
+
+    const badSummary = await fetch(`${ui.url}/api/report`, {
+      method: "POST",
+      body: JSON.stringify({ format: "junit", summary: { nope: true } }),
+    });
+    expect(badSummary.status).toBe(400);
+  });
+
   it("serves a helpful page when the UI bundle is missing", async () => {
     const res = await fetch(`${ui.url}/`);
     // Depending on whether build:ui has run, this is the app or the hint page.

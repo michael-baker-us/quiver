@@ -214,6 +214,14 @@ tests:
         instead.
       </p>
       <p>
+        After a run finishes, the results panel offers{" "}
+        <strong>Download report</strong> buttons: <strong>JUnit XML</strong>{" "}
+        (for test dashboards and CI systems) and <strong>HTML</strong> (a
+        single self-contained page you can attach to a ticket or email to
+        anyone). These are the exact same reports the command line produces
+        in CI, generated from the run you just watched — nothing is re-sent.
+      </p>
+      <p>
         The command line runs the very same files, which is how these tests
         run in pipelines:
       </p>
