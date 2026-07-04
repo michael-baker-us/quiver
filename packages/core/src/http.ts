@@ -21,24 +21,46 @@ export interface HttpResponse {
   timeMs: number;
 }
 
+/**
+ * The request exactly as it goes on the wire: final URL (query appended),
+ * headers after auth and content-type injection, serialized body. This is
+ * what reports show for debugging — the request *file* only shows intent.
+ */
+export interface SentRequest {
+  method: HttpMethod;
+  url: string;
+  headers: Record<string, string>;
+  bodyText?: string;
+  /**
+   * Lowercased names of headers carrying credentials (auth-injected).
+   * Reports must redact their values.
+   */
+  sensitiveHeaders: string[];
+}
+
+export interface PreparedRequest extends SentRequest {
+  timeoutMs: number;
+}
+
 export const DEFAULT_TIMEOUT_MS = 30_000;
 
-function applyAuth(headers: Headers, auth: Auth | undefined): void {
-  if (!auth || auth.type === "none") return;
+/** Returns the lowercased names of any credential headers it set. */
+function applyAuth(headers: Headers, auth: Auth | undefined): string[] {
+  if (!auth || auth.type === "none") return [];
   switch (auth.type) {
     case "bearer":
       headers.set("Authorization", `Bearer ${auth.token}`);
-      break;
+      return ["authorization"];
     case "basic": {
       const encoded = Buffer.from(`${auth.username}:${auth.password}`).toString(
         "base64",
       );
       headers.set("Authorization", `Basic ${encoded}`);
-      break;
+      return ["authorization"];
     }
     case "apikey":
       headers.set(auth.header, auth.value);
-      break;
+      return [auth.header.toLowerCase()];
   }
 }
 
@@ -62,28 +84,49 @@ function serializeBody(headers: Headers, body: RequestBody): string {
   }
 }
 
-export async function executeRequest(
-  request: ResolvedRequest,
-): Promise<HttpResponse> {
+/**
+ * Turns a resolved request into exactly what will be sent — pure, so the
+ * runner can record it (and reports can show it) even when the network call
+ * itself fails afterwards.
+ */
+export function prepareRequest(request: ResolvedRequest): PreparedRequest {
   const url = new URL(request.url);
   for (const [key, value] of Object.entries(request.query)) {
     url.searchParams.append(key, value);
   }
 
   const headers = new Headers(request.headers);
-  applyAuth(headers, request.auth);
+  const sensitiveHeaders = applyAuth(headers, request.auth);
 
   let bodyText: string | undefined;
   if (request.body && request.method !== "GET" && request.method !== "HEAD") {
     bodyText = serializeBody(headers, request.body);
   }
 
-  const started = performance.now();
-  const response = await fetch(url, {
+  const headerRecord: Record<string, string> = {};
+  headers.forEach((value, key) => {
+    headerRecord[key] = value;
+  });
+
+  return {
     method: request.method,
-    headers,
-    body: bodyText,
-    signal: AbortSignal.timeout(request.timeoutMs),
+    url: url.toString(),
+    headers: headerRecord,
+    bodyText,
+    sensitiveHeaders,
+    timeoutMs: request.timeoutMs,
+  };
+}
+
+export async function executeRequest(
+  prepared: PreparedRequest,
+): Promise<HttpResponse> {
+  const started = performance.now();
+  const response = await fetch(prepared.url, {
+    method: prepared.method,
+    headers: prepared.headers,
+    body: prepared.bodyText,
+    signal: AbortSignal.timeout(prepared.timeoutMs),
     redirect: "follow",
   });
   const responseText = await response.text();

@@ -222,6 +222,17 @@ tests:
         in CI, generated from the run you just watched — nothing is re-sent.
       </p>
       <p>
+        The HTML report is made for sharing with people who don&apos;t use
+        quiver: every request is a card that expands into its checks plus the
+        full exchange — the request as actually sent (final URL, headers,
+        body) and the complete response. Credential headers and captured
+        values are redacted automatically, so tokens never end up in a file
+        that gets emailed around. One caveat: request <em>bodies</em> appear
+        exactly as they were sent, including values filled in from variables —
+        so when an API offers a choice, put credentials in the{" "}
+        <strong>Auth</strong> tab (always redacted) rather than in the body.
+      </p>
+      <p>
         The command line runs the very same files, which is how these tests
         run in pipelines:
       </p>

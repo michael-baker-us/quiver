@@ -115,6 +115,27 @@ describe("runCollection", () => {
       authToken: "tok-123",
       userId: "7",
     });
+
+    // The request as actually sent is recorded for reporting: final URL,
+    // injected headers, serialized body, and which headers hold credentials.
+    const login = summary.results[0]!.sent!;
+    expect(login.url).toBe(`${baseUrl}/login`);
+    expect(login.headers["content-type"]).toBe("application/json");
+    expect(login.bodyText).toBe('{"username":"ada"}');
+    const me = summary.results[1]!.sent!;
+    expect(me.headers.authorization).toBe("Bearer tok-123");
+    expect(me.sensitiveHeaders).toEqual(["authorization"]);
+  });
+
+  it("records the sent request even when the network call fails", async () => {
+    const loaded = await loadCollection(collectionDir);
+    const summary = await runCollection(loaded, {
+      variables: { baseUrl: "http://127.0.0.1:1" },
+      bail: true,
+    });
+    const first = summary.results[0]!;
+    expect(first.error).toBeDefined();
+    expect(first.sent?.url).toBe("http://127.0.0.1:1/login");
   });
 
   it("reports failures without crashing and supports bail", async () => {

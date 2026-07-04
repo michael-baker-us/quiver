@@ -148,8 +148,20 @@ quiver run my-api --env ci --reporter html  --output report.html   # a single se
 ```
 
 Each assertion becomes its own JUnit testcase (`Login ➜ status is 200`), so a
-test viewer shows exactly which check failed, not just which request. If you
-need more than one format from a single run — the common case in CI — run
+test viewer shows exactly which check failed, not just which request.
+
+The HTML report is a self-contained, clickable page written for people who
+don't use quiver: summary stats, pass/fail filters, and one expandable card
+per request showing its checks and the full exchange — the request as
+actually sent (final URL, headers, body) and the complete response (status,
+headers, body, pretty-printed when JSON). Credential headers (`Authorization`,
+API-key headers, cookies) and captured values are redacted before they reach
+the report or the JSON run file, so both are safe to attach to a ticket or
+email. Request bodies appear exactly as sent, so prefer auth blocks over
+in-body credentials where the API allows it. Response bodies are capped at
+10 kB per request to keep reports a sane size.
+
+If you need more than one format from a single run — the common case in CI — run
 once with `--reporter json` and reformat the saved file, so the collection's
 requests (and any side effects, like a POST creating a resource) never
 execute twice:
@@ -225,7 +237,9 @@ toggle. `⌘+Enter` sends, `⌘+S` saves.
 After a **Run all**, the results panel offers the same JUnit XML and HTML
 reports the CLI produces — generated from the run that just finished (via
 the stateless `POST /api/report` endpoint), never by re-executing the
-collection.
+collection. The run stream carries a pre-redacted report entry per request,
+so the downloadable HTML has the full request/response detail without the
+browser ever holding a shareable copy of your credentials.
 
 The **Guide** button in the top bar opens built-in documentation covering
 the request format, variables, secrets, every assertion type, and

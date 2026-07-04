@@ -13,6 +13,7 @@ import {
   requestFileSchema,
   runCollection,
   runRequest,
+  toJsonResult,
   type RequestResult,
 } from "@quiver/core";
 
@@ -219,13 +220,21 @@ async function handleApi(
       "content-type": "application/x-ndjson",
       "cache-control": "no-cache",
     });
+    // Accumulates captures as the run progresses so each streamed event's
+    // `report` entry is scrubbed with every value captured so far — the
+    // client assembles these into a shareable report without a second run.
+    const captures: Record<string, string> = {};
     const summary = await runCollection(loaded, {
       variables,
       bail: body.bail === true,
       onResult: (result) => {
+        Object.assign(captures, result.captured);
         res.write(
-          JSON.stringify({ type: "result", ...serializeResult(result, false) }) +
-            "\n",
+          JSON.stringify({
+            type: "result",
+            ...serializeResult(result, false),
+            report: toJsonResult(result, captures),
+          }) + "\n",
         );
       },
     });

@@ -1,9 +1,24 @@
-import type { RunSummary } from "./runner.js";
+import type { RequestResult, RunSummary } from "./runner.js";
 
 export interface JsonAssertion {
   ok: boolean;
   description: string;
   detail?: string;
+}
+
+/** The request as sent, after redaction — safe to put in a shared report. */
+export interface JsonRequestDetail {
+  url: string;
+  headers: Record<string, string>;
+  body?: string;
+  bodyTruncated?: boolean;
+}
+
+export interface JsonResponseDetail {
+  statusText: string;
+  headers: Record<string, string>;
+  body?: string;
+  bodyTruncated?: boolean;
 }
 
 export interface JsonResult {
@@ -15,6 +30,9 @@ export interface JsonResult {
   status?: number;
   timeMs?: number;
   assertions: JsonAssertion[];
+  /** Absent for pre-send failures (unresolvable variable, bad URL). */
+  request?: JsonRequestDetail;
+  response?: JsonResponseDetail;
 }
 
 export interface JsonSummary {
@@ -22,6 +40,108 @@ export interface JsonSummary {
   failed: number;
   durationMs: number;
   results: JsonResult[];
+}
+
+/** Bodies are cut at this length so one huge payload can't balloon a report. */
+export const REPORT_BODY_LIMIT = 10_000;
+
+/**
+ * Captured values shorter than this are not scrubbed: replacing every "1" in
+ * a body would mangle it, and real secrets (tokens, session ids) are long.
+ */
+const SCRUB_MIN_LENGTH = 8;
+
+const REDACTED = "«redacted»";
+
+/** Headers whose values are credentials no matter how they were set. */
+const SENSITIVE_HEADER_NAMES = new Set([
+  "authorization",
+  "proxy-authorization",
+  "cookie",
+  "set-cookie",
+  "x-api-key",
+]);
+
+function scrubText(text: string, captures: Record<string, string>): string {
+  let out = text;
+  for (const [name, value] of Object.entries(captures)) {
+    if (value.length < SCRUB_MIN_LENGTH) continue;
+    out = out.split(value).join(`«captured ${name}»`);
+  }
+  return out;
+}
+
+function scrubHeaders(
+  headers: Record<string, string>,
+  captures: Record<string, string>,
+  sensitiveNames: string[],
+): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(headers)) {
+    const lower = key.toLowerCase();
+    out[key] =
+      SENSITIVE_HEADER_NAMES.has(lower) || sensitiveNames.includes(lower)
+        ? REDACTED
+        : scrubText(value, captures);
+  }
+  return out;
+}
+
+function reportBody(
+  text: string | undefined,
+  captures: Record<string, string>,
+): { body?: string; bodyTruncated?: boolean } {
+  if (text === undefined || text.length === 0) return {};
+  const scrubbed = scrubText(text, captures);
+  if (scrubbed.length <= REPORT_BODY_LIMIT) return { body: scrubbed };
+  return { body: scrubbed.slice(0, REPORT_BODY_LIMIT), bodyTruncated: true };
+}
+
+/**
+ * Converts one runner result into its report shape. Reports are made to be
+ * shared (attached to tickets, emailed), so everything secret-shaped is
+ * removed here: credential headers are redacted, and every occurrence of a
+ * captured value (auth tokens being the classic case) is replaced with
+ * «captured name» — which doubles as debugging signal, since it shows where
+ * a chained value actually landed. `knownCaptures` must include this
+ * result's own captures plus every earlier result's.
+ */
+export function toJsonResult(
+  result: RequestResult,
+  knownCaptures: Record<string, string> = {},
+): JsonResult {
+  return {
+    name: result.request.definition.name ?? result.request.relativePath,
+    file: result.request.relativePath,
+    method: result.request.definition.method,
+    passed: result.passed,
+    error: result.error,
+    status: result.response?.status,
+    timeMs: result.response ? Math.round(result.response.timeMs) : undefined,
+    assertions: result.assertions.map((a) => ({
+      ok: a.ok,
+      description: a.description,
+      detail: a.detail,
+    })),
+    request: result.sent
+      ? {
+          url: scrubText(result.sent.url, knownCaptures),
+          headers: scrubHeaders(
+            result.sent.headers,
+            knownCaptures,
+            result.sent.sensitiveHeaders,
+          ),
+          ...reportBody(result.sent.bodyText, knownCaptures),
+        }
+      : undefined,
+    response: result.response
+      ? {
+          statusText: result.response.statusText,
+          headers: scrubHeaders(result.response.headers, knownCaptures, []),
+          ...reportBody(result.response.bodyText, knownCaptures),
+        }
+      : undefined,
+  };
 }
 
 /**
@@ -32,24 +152,17 @@ export interface JsonSummary {
  * to be executed once per run.
  */
 export function toJsonSummary(summary: RunSummary): JsonSummary {
+  const captures: Record<string, string> = {};
   return {
     passed: summary.passed,
     failed: summary.failed,
     durationMs: Math.round(summary.durationMs),
-    results: summary.results.map((result) => ({
-      name: result.request.definition.name ?? result.request.relativePath,
-      file: result.request.relativePath,
-      method: result.request.definition.method,
-      passed: result.passed,
-      error: result.error,
-      status: result.response?.status,
-      timeMs: result.response ? Math.round(result.response.timeMs) : undefined,
-      assertions: result.assertions.map((a) => ({
-        ok: a.ok,
-        description: a.description,
-        detail: a.detail,
-      })),
-    })),
+    results: summary.results.map((result) => {
+      // Merge before converting: a login response body contains the very
+      // token it captures, so a result must be scrubbed with its own values.
+      Object.assign(captures, result.captured);
+      return toJsonResult(result, captures);
+    }),
   };
 }
 
@@ -134,69 +247,3 @@ export function buildJunitXml(data: JsonSummary): string {
   ].join("\n");
 }
 
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
-
-/** Builds a single self-contained HTML file — no external assets — for CI artifacts. */
-export function buildHtmlReport(data: JsonSummary, collectionName: string): string {
-  const rows = data.results
-    .map((result) => {
-      const badge = result.passed ? "PASS" : "FAIL";
-      const color = result.passed ? "#17803d" : "#c02b2b";
-      const assertionRows = result.assertions
-        .map(
-          (a) =>
-            `<li class="${a.ok ? "pass" : "fail"}">${a.ok ? "✓" : "✗"} ${escapeHtml(a.description)}${
-              a.detail ? ` — ${escapeHtml(a.detail)}` : ""
-            }</li>`,
-        )
-        .join("");
-      const errorLine = result.error ? `<p class="error">${escapeHtml(result.error)}</p>` : "";
-      const meta =
-        result.status !== undefined
-          ? `<span class="meta">${result.status} · ${result.timeMs}ms</span>`
-          : "";
-      return `      <details${result.passed ? "" : " open"}>
-        <summary style="color:${color}"><strong>${badge}</strong> ${escapeHtml(result.method)} ${escapeHtml(result.name)}${meta}</summary>
-        ${errorLine}
-        <ul class="assertions">${assertionRows}</ul>
-      </details>`;
-    })
-    .join("\n");
-
-  return `<!doctype html>
-<html lang="en">
-<head>
-<meta charset="UTF-8" />
-<title>${escapeHtml(collectionName)} — quiver report</title>
-<style>
-  body { font-family: system-ui, sans-serif; margin: 2rem auto; max-width: 800px; color: #1c2430; }
-  h1 { margin-bottom: 0.2rem; }
-  .summary { color: #66707d; margin-bottom: 1.5rem; }
-  .summary .pass { color: #17803d; font-weight: 700; }
-  .summary .fail { color: #c02b2b; font-weight: 700; }
-  details { border: 1px solid #dfe3e8; border-radius: 6px; margin-bottom: 0.5rem; padding: 0.5rem 0.8rem; }
-  summary { cursor: pointer; }
-  summary .meta { color: #66707d; font-weight: 400; margin-left: 0.5rem; font-size: 0.85em; }
-  .assertions { list-style: none; margin: 0.5rem 0 0; padding: 0; font-size: 0.9em; }
-  .assertions li.pass { color: #17803d; }
-  .assertions li.fail { color: #c02b2b; }
-  .error { color: #c02b2b; }
-</style>
-</head>
-<body>
-  <h1>${escapeHtml(collectionName)}</h1>
-  <p class="summary">
-    <span class="pass">${data.passed} passed</span>, <span class="fail">${data.failed} failed</span>
-    (${data.durationMs}ms)
-  </p>
-${rows}
-</body>
-</html>
-`;
-}

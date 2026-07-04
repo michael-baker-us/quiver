@@ -1,4 +1,9 @@
-import type { AssertionResult, HttpMethod } from "@quiver/core";
+import type {
+  AssertionResult,
+  HttpMethod,
+  JsonResult,
+  JsonSummary,
+} from "@quiver/core";
 
 export interface RequestSummary {
   relativePath: string;
@@ -34,25 +39,19 @@ export interface SendResult {
 }
 
 export type RunEvent =
-  | ({ type: "result" } & SendResult)
+  | ({
+      type: "result";
+      /**
+       * The report-ready form of this result, redacted server-side
+       * (credential headers, captured values) — safe to put in a shareable
+       * report, unlike the live fields above.
+       */
+      report?: JsonResult;
+    } & SendResult)
   | { type: "summary"; passed: number; failed: number; durationMs: number };
 
 /** The JsonSummary shape the server's /api/report endpoint expects. */
-export interface RunReportPayload {
-  passed: number;
-  failed: number;
-  durationMs: number;
-  results: {
-    name: string;
-    file: string;
-    method: string;
-    passed: boolean;
-    error?: string;
-    status?: number;
-    timeMs?: number;
-    assertions: { ok: boolean; description: string; detail?: string }[];
-  }[];
-}
+export type RunReportPayload = JsonSummary;
 
 /** Folds a finished run's streamed events into a report payload; null until the summary arrives. */
 export function summarizeRunEvents(events: RunEvent[]): RunReportPayload | null {
@@ -64,20 +63,25 @@ export function summarizeRunEvents(events: RunEvent[]): RunReportPayload | null 
     durationMs: summary.durationMs,
     results: events
       .filter((e) => e.type === "result")
-      .map((result) => ({
-        name: result.name,
-        file: result.relativePath,
-        method: result.method,
-        passed: result.passed,
-        error: result.error,
-        status: result.response?.status,
-        timeMs: result.response?.timeMs,
-        assertions: result.assertions.map((a) => ({
-          ok: a.ok,
-          description: a.description,
-          detail: a.detail,
-        })),
-      })),
+      .map(
+        (result) =>
+          // Prefer the server's redacted report entry; fall back to the
+          // basic fields so an old-format stream still yields a report.
+          result.report ?? {
+            name: result.name,
+            file: result.relativePath,
+            method: result.method,
+            passed: result.passed,
+            error: result.error,
+            status: result.response?.status,
+            timeMs: result.response?.timeMs,
+            assertions: result.assertions.map((a) => ({
+              ok: a.ok,
+              description: a.description,
+              detail: a.detail,
+            })),
+          },
+      ),
   };
 }
 

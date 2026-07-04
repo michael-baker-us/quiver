@@ -180,6 +180,14 @@ describe("ui server API", () => {
     expect(lines).toHaveLength(2);
     expect(lines[0]).toMatchObject({ type: "result", passed: true });
     expect(lines[1]).toMatchObject({ type: "summary", passed: 1, failed: 0 });
+
+    // Each result event carries a report-ready entry (redacted server-side)
+    // with the full exchange, so the client can build a shareable report.
+    expect(lines[0].report).toMatchObject({
+      file: "things/get-thing.request.yaml",
+      request: { url: `${apiBaseUrl}/thing` },
+    });
+    expect(lines[0].report.response.body).toContain('"ok":true');
   });
 
   it("POST /api/report formats a supplied summary as junit or html without re-running", async () => {

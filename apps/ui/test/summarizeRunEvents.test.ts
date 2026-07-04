@@ -55,6 +55,34 @@ describe("summarizeRunEvents", () => {
     expect(JSON.stringify(payload)).not.toContain("abc");
   });
 
+  it("prefers the server's redacted report entry when present", () => {
+    const report = {
+      name: "Get thing",
+      file: "things/get-thing.request.yaml",
+      method: "GET",
+      passed: false,
+      status: 500,
+      timeMs: 41,
+      assertions: [],
+      request: {
+        url: "https://api.test/thing",
+        headers: { authorization: "«redacted»" },
+      },
+      response: {
+        statusText: "Internal Server Error",
+        headers: {},
+        body: '{"ok":false}',
+      },
+    };
+    const payload = summarizeRunEvents([
+      { ...resultEvent, report },
+      { type: "summary", passed: 0, failed: 1, durationMs: 50 },
+    ]);
+    expect(payload?.results[0]).toEqual(report);
+    // the raw (unredacted) event fields must not leak into the payload
+    expect(JSON.stringify(payload)).not.toContain("abc");
+  });
+
   it("carries request-level errors through", () => {
     const payload = summarizeRunEvents([
       {

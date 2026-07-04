@@ -3,8 +3,11 @@ import { getPath, NOT_FOUND } from "./jsonpath.js";
 import {
   DEFAULT_TIMEOUT_MS,
   executeRequest,
+  prepareRequest,
   type HttpResponse,
+  type PreparedRequest,
   type ResolvedRequest,
+  type SentRequest,
 } from "./http.js";
 import type { LoadedCollection, LoadedRequest } from "./loader.js";
 import type { CollectionDefinition, RequestDefinition } from "./schema.js";
@@ -12,6 +15,12 @@ import { resolveDeep, resolveString, resolveStringMap } from "./variables.js";
 
 export interface RequestResult {
   request: LoadedRequest;
+  /**
+   * The request as actually sent (final URL, headers, body). Present as soon
+   * as preparation succeeded — including when the network call then failed,
+   * which is exactly when you want to see what went on the wire.
+   */
+  sent?: SentRequest;
   /** Undefined when the request could not be sent (resolution/network error). */
   response?: HttpResponse;
   error?: string;
@@ -89,13 +98,28 @@ export async function runRequest(
   variables: Record<string, string>,
   collection?: CollectionDefinition,
 ): Promise<RequestResult> {
-  let response: HttpResponse;
+  let prepared: PreparedRequest;
   try {
-    const resolved = resolveRequest(request.definition, variables, collection);
-    response = await executeRequest(resolved);
+    prepared = prepareRequest(
+      resolveRequest(request.definition, variables, collection),
+    );
   } catch (error) {
     return {
       request,
+      error: error instanceof Error ? error.message : String(error),
+      assertions: [],
+      captured: {},
+      passed: false,
+    };
+  }
+
+  let response: HttpResponse;
+  try {
+    response = await executeRequest(prepared);
+  } catch (error) {
+    return {
+      request,
+      sent: prepared,
       error: error instanceof Error ? error.message : String(error),
       assertions: [],
       captured: {},
@@ -116,6 +140,7 @@ export async function runRequest(
 
   return {
     request,
+    sent: prepared,
     response,
     assertions,
     captured,
