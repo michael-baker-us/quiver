@@ -16,22 +16,22 @@ npm install
 npm run build
 
 # Run the demo collection against the public JSONPlaceholder API
-node packages/cli/dist/index.js run examples/demo-api --env default
+node packages/cli/dist/index.js run collections/demo-api --env default
 
 # Send a single request
-node packages/cli/dist/index.js send examples/demo-api/users/01-list-users.request.yaml --env default
+node packages/cli/dist/index.js send collections/demo-api/users/01-list-users.request.yaml --env default
 
 # See what's in a collection
-node packages/cli/dist/index.js list examples/demo-api
+node packages/cli/dist/index.js list collections/demo-api
 
 # Generate a collection from an OpenAPI 3.x spec
 node packages/cli/dist/index.js import openapi.yaml --out collections/my-api
 
 # Open the point-and-click web UI (build it once with: npm run build:ui)
-node packages/cli/dist/index.js ui examples/demo-api
+node packages/cli/dist/index.js ui collections/demo-api
 
 # Or point it at a parent directory to manage several collections at once
-node packages/cli/dist/index.js ui examples
+node packages/cli/dist/index.js ui collections
 ```
 
 ## Collection format
