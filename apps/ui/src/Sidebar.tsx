@@ -379,6 +379,9 @@ export function Sidebar({
                       </ul>
                     </div>
                   )}
+                  {collection.environments.length > 0 && !filtering && (
+                    <span className="env-section-label">Requests</span>
+                  )}
                   {nodes.length === 0 ? (
                     <p className="sidebar-empty">
                       {filtering ? "No requests match." : "No requests yet."}
