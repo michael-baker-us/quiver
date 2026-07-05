@@ -11,11 +11,21 @@ export interface RequestSummary {
   method: HttpMethod;
 }
 
-export interface CollectionInfo {
+export interface CollectionSummary {
+  /** POSIX relative dir path from the workspace root; "." when the server was started on a collection. */
+  id: string;
   name: string;
   description?: string;
   environments: string[];
+  folders: string[];
   requests: RequestSummary[];
+  /** Set when collection.yaml failed to load; other fields are empty then. */
+  error?: string;
+}
+
+export interface WorkspaceInfo {
+  mode: "collection" | "workspace";
+  collections: CollectionSummary[];
 }
 
 export interface ResponseInfo {
@@ -85,6 +95,15 @@ export function summarizeRunEvents(events: RunEvent[]): RunReportPayload | null 
   };
 }
 
+/**
+ * A collection id is always one URL segment. "." (the root collection) would
+ * be normalized away by URL parsing, so it travels as the reserved "~".
+ */
+function collectionUrl(collectionId: string, rest = ""): string {
+  const segment = collectionId === "." ? "~" : encodeURIComponent(collectionId);
+  return `/api/collections/${segment}${rest}`;
+}
+
 async function checkOk(res: Response): Promise<Response> {
   if (res.ok) return res;
   let message = `${res.status} ${res.statusText}`;
@@ -97,37 +116,155 @@ async function checkOk(res: Response): Promise<Response> {
   throw new Error(message);
 }
 
-export async function getCollection(): Promise<CollectionInfo> {
-  const res = await checkOk(await fetch("/api/collection"));
-  return (await res.json()) as CollectionInfo;
+async function jsonRequest(
+  url: string,
+  method: "POST" | "PUT" | "PATCH" | "DELETE",
+  body?: unknown,
+): Promise<void> {
+  await checkOk(
+    await fetch(url, {
+      method,
+      body: body === undefined ? undefined : JSON.stringify(body),
+    }),
+  );
 }
 
-export async function getRequestFile(relativePath: string): Promise<string> {
+export async function getWorkspace(): Promise<WorkspaceInfo> {
+  const res = await checkOk(await fetch("/api/workspace"));
+  return (await res.json()) as WorkspaceInfo;
+}
+
+// --- collections ---
+
+export async function createCollection(dirName: string, name: string): Promise<void> {
+  await jsonRequest("/api/collections", "POST", { dirName, name });
+}
+
+export async function renameCollection(collectionId: string, name: string): Promise<void> {
+  await jsonRequest(collectionUrl(collectionId), "PATCH", { name });
+}
+
+export async function deleteCollection(collectionId: string): Promise<void> {
+  await jsonRequest(collectionUrl(collectionId), "DELETE");
+}
+
+// --- requests ---
+
+export async function getRequestFile(
+  collectionId: string,
+  relativePath: string,
+): Promise<string> {
   const res = await checkOk(
-    await fetch(`/api/requests/${encodeURIComponent(relativePath)}`),
+    await fetch(collectionUrl(collectionId, `/requests/${encodeURIComponent(relativePath)}`)),
   );
   const data = (await res.json()) as { content: string };
   return data.content;
 }
 
 export async function saveRequestFile(
+  collectionId: string,
   relativePath: string,
   content: string,
 ): Promise<void> {
-  await checkOk(
-    await fetch(`/api/requests/${encodeURIComponent(relativePath)}`, {
-      method: "PUT",
-      body: JSON.stringify({ content }),
-    }),
+  await jsonRequest(
+    collectionUrl(collectionId, `/requests/${encodeURIComponent(relativePath)}`),
+    "PUT",
+    { content },
   );
 }
 
+export async function renameRequest(
+  collectionId: string,
+  from: string,
+  to: string,
+): Promise<void> {
+  await jsonRequest(collectionUrl(collectionId, "/requests/rename"), "POST", { from, to });
+}
+
+export async function deleteRequest(
+  collectionId: string,
+  relativePath: string,
+): Promise<void> {
+  await jsonRequest(
+    collectionUrl(collectionId, `/requests/${encodeURIComponent(relativePath)}`),
+    "DELETE",
+  );
+}
+
+// --- folders ---
+
+export async function createFolder(collectionId: string, path: string): Promise<void> {
+  await jsonRequest(collectionUrl(collectionId, "/folders"), "POST", { path });
+}
+
+export async function renameFolder(
+  collectionId: string,
+  from: string,
+  to: string,
+): Promise<void> {
+  await jsonRequest(collectionUrl(collectionId, "/folders/rename"), "POST", { from, to });
+}
+
+export async function deleteFolder(collectionId: string, path: string): Promise<void> {
+  await jsonRequest(
+    collectionUrl(collectionId, `/folders/${encodeURIComponent(path)}`),
+    "DELETE",
+  );
+}
+
+// --- environments ---
+
+export async function createEnvironment(collectionId: string, name: string): Promise<void> {
+  await jsonRequest(collectionUrl(collectionId, "/environments"), "POST", { name });
+}
+
+export async function getEnvironment(
+  collectionId: string,
+  name: string,
+): Promise<Record<string, string>> {
+  const res = await checkOk(
+    await fetch(collectionUrl(collectionId, `/environments/${encodeURIComponent(name)}`)),
+  );
+  const data = (await res.json()) as { variables: Record<string, string> };
+  return data.variables;
+}
+
+export async function saveEnvironment(
+  collectionId: string,
+  name: string,
+  variables: Record<string, string>,
+): Promise<void> {
+  await jsonRequest(
+    collectionUrl(collectionId, `/environments/${encodeURIComponent(name)}`),
+    "PUT",
+    { variables },
+  );
+}
+
+export async function renameEnvironment(
+  collectionId: string,
+  from: string,
+  to: string,
+): Promise<void> {
+  await jsonRequest(collectionUrl(collectionId, "/environments/rename"), "POST", { from, to });
+}
+
+export async function deleteEnvironment(collectionId: string, name: string): Promise<void> {
+  await jsonRequest(
+    collectionUrl(collectionId, `/environments/${encodeURIComponent(name)}`),
+    "DELETE",
+  );
+}
+
+// --- send / run / report ---
+
 export async function sendRequest(
+  collectionId: string,
   relativePath: string,
   env: string | undefined,
 ): Promise<SendResult> {
   const res = await checkOk(
-    await fetch("/api/send", {
+    await fetch(collectionUrl(collectionId, "/send"), {
       method: "POST",
       body: JSON.stringify({ path: relativePath, env }),
     }),
@@ -152,11 +289,15 @@ export async function fetchReport(
 
 /** Streams NDJSON run events; onEvent fires as each request finishes. */
 export async function runAll(
+  collectionId: string,
   env: string | undefined,
   onEvent: (event: RunEvent) => void,
 ): Promise<void> {
   const res = await checkOk(
-    await fetch("/api/run", { method: "POST", body: JSON.stringify({ env }) }),
+    await fetch(collectionUrl(collectionId, "/run"), {
+      method: "POST",
+      body: JSON.stringify({ env }),
+    }),
   );
   const reader = res.body!.getReader();
   const decoder = new TextDecoder();

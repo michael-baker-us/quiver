@@ -45,7 +45,7 @@ export function tabBadge(form: RequestFormData, tab: FormTab): number | "dot" | 
   }
 }
 
-function KeyValueEditor({
+export function KeyValueEditor({
   rows,
   onChange,
   keyPlaceholder = "Name",

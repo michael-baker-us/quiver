@@ -13,17 +13,22 @@ import {
 type EditorMode = "form" | "yaml";
 
 export function RequestPanel({
+  collectionId,
   relativePath,
   env,
   isNew,
   template,
   onSaved,
+  onDirtyChange,
 }: {
+  collectionId: string;
   relativePath: string;
   env: string | undefined;
   isNew: boolean;
   template: string;
   onSaved: () => void;
+  /** Lets the app warn before rename/delete discards unsaved edits. */
+  onDirtyChange?: (dirty: boolean) => void;
 }) {
   const [content, setContent] = useState<string | null>(null);
   const [savedContent, setSavedContent] = useState<string | null>(null);
@@ -75,11 +80,11 @@ export function RequestPanel({
       applyLoadedContent(template, null);
       return;
     }
-    getRequestFile(relativePath)
+    getRequestFile(collectionId, relativePath)
       .then((text) => applyLoadedContent(text, text))
       .catch((error: Error) => setProblem(error.message));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [relativePath, isNew, template]);
+  }, [collectionId, relativePath, isNew, template]);
 
   // The form and the raw YAML text only sync at explicit boundaries — mode
   // switches and saves — never per keystroke. Re-deriving YAML from form
@@ -108,6 +113,12 @@ export function RequestPanel({
   const liveSerialized = mode === "form" && formData ? stringifyFormData(formData) : content;
   const dirty = liveSerialized !== null && liveSerialized !== savedContent;
 
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+    return () => onDirtyChange?.(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dirty]);
+
   // In YAML mode the URL bar is read-only (the text is the source of truth;
   // editing these fields would force a rewrite that destroys comments).
   // Parsing here is read-only and safe; mid-edit parse failures fall back to
@@ -125,7 +136,7 @@ export function RequestPanel({
     if (liveSerialized === null) return false;
     setProblem(null);
     try {
-      await saveRequestFile(relativePath, liveSerialized);
+      await saveRequestFile(collectionId, relativePath, liveSerialized);
       setSavedContent(liveSerialized);
       setContent(liveSerialized);
       const reparsed = parseRequestContent(liveSerialized);
@@ -150,7 +161,7 @@ export function RequestPanel({
     try {
       if (dirty && !(await save())) return;
       setProblem(null);
-      setResult(await sendRequest(relativePath, env));
+      setResult(await sendRequest(collectionId, relativePath, env));
     } catch (error) {
       setProblem((error as Error).message);
     } finally {

@@ -29,6 +29,9 @@ node packages/cli/dist/index.js import openapi.yaml --out collections/my-api
 
 # Open the point-and-click web UI (build it once with: npm run build:ui)
 node packages/cli/dist/index.js ui examples/demo-api
+
+# Or point it at a parent directory to manage several collections at once
+node packages/cli/dist/index.js ui examples
 ```
 
 ## Collection format
@@ -134,7 +137,7 @@ quiver report     <file>  --format junit|html [--output <file>] [--name <name>]
 quiver list       <dir>
 quiver import     <spec>  --out <dir> [--force]
 quiver export-k6  <dir>   --out <file> [--env <name>] [--vus <n>] [--duration <duration>]
-quiver ui         <dir>   [--port <port>] [--no-open]
+quiver ui         <dir>   [--port <port>] [--no-open]   # <dir> = a collection or a workspace of collections
 ```
 
 Exit codes: `0` all passed, `1` failures, `2` usage/config error — safe to
@@ -215,18 +218,31 @@ hand-translating requests.
 
 ```bash
 npm run build:ui          # one-time (and after UI changes)
-quiver ui my-api          # opens http://127.0.0.1:4123
+quiver ui my-api          # one collection
+quiver ui collections/    # a workspace: every collection under the directory
 ```
 
-A local web app for browsing, creating, editing, sending, and running the
-collection — aimed at teammates who won't touch a terminal. It edits the
+A local web app for browsing, creating, editing, sending, and running
+collections — aimed at teammates who won't touch a terminal. It edits the
 same YAML files on disk, so every change made in the UI shows up in
 `git diff`. Saves are validated against the request schema server-side; the
 UI cannot produce a file the CLI would reject. The server binds to 127.0.0.1
 only.
 
-The layout follows the conventions Postman users already know: method + URL
-+ Send in a bar at the top, with Params / Headers / Auth / Body / Tests /
+Point `quiver ui` at a directory containing several collections (any folder
+with a `collection.yaml` up to three levels down) and the sidebar shows all
+of them, Postman-style. The **+ New** button and per-item **⋯** menus create,
+rename, and delete collections, folders, requests, and environments;
+environments open in a key/value editor. Every one of those actions is an
+ordinary file operation in your repository — a delete is a deleted file,
+recoverable with `git checkout`, and a new collection is a new folder with a
+`collection.yaml` you can commit. The environment picker and **▶ Run all**
+apply to the active collection (the one you're working in), and each
+collection remembers its own selected environment. An empty directory works
+too: create your first collection from the UI.
+
+The layout follows the conventions Postman users already know: method, URL,
+and Send in a bar at the top, with Params / Headers / Auth / Body / Tests /
 Capture tabs below it and the response docked underneath (status, time,
 size, assertion results, syntax-highlighted JSON). The request/response
 split is resizable by dragging the divider and can be flipped between
@@ -283,9 +299,11 @@ that discipline is what keeps the GUI and CLI behavior identical.
 - [x] **M4 — integrations**: JUnit XML reporter (Jenkins/GitLab), HTML report,
       GitHub Action, k6 script export
 - [x] Form-based request editor in the UI (alongside YAML view)
-- [ ] Later: delete/rename requests from the UI, cookies/sessions, file
-      upload, request scripts, parallel runs, watch mode (auto-refresh on
-      external file changes), a JMeter/Newman export alongside k6
+- [x] Multi-collection workspaces: create/rename/delete collections, folders,
+      requests, and environments from the UI; environment key/value editor
+- [ ] Later: cookies/sessions, file upload, request scripts, parallel runs,
+      watch mode (auto-refresh on external file changes), a JMeter/Newman
+      export alongside k6
 
 ## Development
 

@@ -4,6 +4,8 @@ export * from "./jsonpath.js";
 export * from "./http.js";
 export * from "./assertions.js";
 export * from "./loader.js";
+export * from "./workspace.js";
+export * from "./mutations.js";
 export * from "./runner.js";
 export * from "./report.js";
 export * from "./htmlReport.js";

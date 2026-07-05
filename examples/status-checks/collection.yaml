@@ -1,0 +1,8 @@
+name: Status Checks
+description: >
+  A second tiny collection so `quiver ui examples` demonstrates a
+  multi-collection workspace. Pings public endpoints that should always
+  answer.
+defaults:
+  headers:
+    Accept: application/json

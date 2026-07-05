@@ -1,19 +1,39 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { readFile, writeFile, mkdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { parse as parseYaml } from "yaml";
 import {
   buildHtmlReport,
   buildJunitXml,
+  COLLECTION_FILENAME,
+  createCollection,
+  createEnvironment,
+  createFolder,
+  deleteCollection,
+  deleteEnvironment,
+  deleteFolder,
+  deleteRequest,
+  environmentFileSchema,
   isJsonSummary,
   listEnvironments,
+  listFolders,
   loadCollection,
   loadEnvironment,
+  renameEnvironment,
+  renameFolder,
+  renameRequest,
+  REQUEST_SUFFIX,
   requestFileSchema,
+  resolveEnvironmentFile,
+  resolveInside,
   runCollection,
   runRequest,
+  scanWorkspace,
   toJsonResult,
+  updateCollectionName,
+  WorkspaceMutationError,
+  writeEnvironment,
   type RequestResult,
 } from "@quiver/core";
 
@@ -33,8 +53,12 @@ const MIME_TYPES: Record<string, string> = {
 };
 
 export interface UiServerOptions {
-  /** Collection root directory (contains collection.yaml). */
-  rootDir: string;
+  /**
+   * Directory to serve. Either a collection root (contains collection.yaml —
+   * served as a single collection with id ".") or a workspace directory
+   * whose subdirectories hold any number of collections.
+   */
+  workspaceDir: string;
   host?: string;
   port?: number;
 }
@@ -71,20 +95,56 @@ class HttpError extends Error {
   }
 }
 
+function requireString(value: unknown, what: string): string {
+  if (typeof value !== "string" || value === "") {
+    throw new HttpError(400, `Expected ${what} to be a non-empty string`);
+  }
+  return value;
+}
+
+async function isCollectionRoot(dir: string): Promise<boolean> {
+  try {
+    return (await stat(path.join(dir, COLLECTION_FILENAME))).isFile();
+  } catch {
+    return false;
+  }
+}
+
 /**
- * Maps a client-supplied relative path to an absolute path inside the
- * collection, rejecting traversal attempts and non-request files. Every
- * filesystem write the server performs goes through this gate.
+ * Maps a collection id from the URL to its root directory. In collection
+ * mode only "." exists; in workspace mode the id is a relative dir path that
+ * must contain collection.yaml. Unknown or escaping ids are 404s — the
+ * client is probing for something that isn't there.
  */
-function resolveRequestPath(rootDir: string, relativePath: string): string {
-  const target = path.resolve(rootDir, relativePath);
-  if (!target.startsWith(rootDir + path.sep)) {
-    throw new HttpError(400, "Path escapes the collection directory");
+async function resolveCollectionDir(
+  workspaceDir: string,
+  mode: "collection" | "workspace",
+  id: string,
+): Promise<string> {
+  let dir: string;
+  if (id === ".") {
+    dir = workspaceDir;
+  } else if (mode === "collection") {
+    throw new HttpError(404, `No collection ${id}`);
+  } else {
+    try {
+      dir = resolveInside(workspaceDir, id);
+    } catch {
+      throw new HttpError(404, `No collection ${id}`);
+    }
   }
-  if (!target.endsWith(".request.yaml")) {
-    throw new HttpError(400, "Only *.request.yaml files can be accessed");
+  if (!(await isCollectionRoot(dir))) {
+    throw new HttpError(404, `No collection ${id}`);
   }
-  return target;
+  return dir;
+}
+
+/** Traversal + suffix guard for request file paths inside a collection. */
+function resolveRequestFile(rootDir: string, relativePath: string): string {
+  if (!relativePath.endsWith(REQUEST_SUFFIX)) {
+    throw new HttpError(400, `Only *${REQUEST_SUFFIX} files can be accessed`);
+  }
+  return resolveInside(rootDir, relativePath);
 }
 
 async function resolveVariables(
@@ -126,47 +186,104 @@ function serializeResult(result: RequestResult, includeBody: boolean) {
   };
 }
 
-async function handleApi(
-  rootDir: string,
-  req: IncomingMessage,
-  res: ServerResponse,
-  url: URL,
-): Promise<void> {
-  const route = `${req.method} ${url.pathname}`;
-
-  if (route === "GET /api/collection") {
+async function describeCollection(id: string, rootDir: string) {
+  try {
     const loaded = await loadCollection(rootDir);
-    sendJson(res, 200, {
+    return {
+      id,
       name: loaded.collection.name,
       description: loaded.collection.description,
       environments: await listEnvironments(rootDir),
+      folders: await listFolders(rootDir),
       requests: loaded.requests.map((request) => ({
         relativePath: request.relativePath,
         name: request.definition.name ?? request.relativePath,
         method: request.definition.method,
       })),
-    });
-    return;
+    };
+  } catch (error) {
+    // A broken collection.yaml renders as a broken node, not a dead app.
+    return {
+      id,
+      name: id === "." ? path.basename(rootDir) : id,
+      environments: [],
+      folders: [],
+      requests: [],
+      error: (error as Error).message,
+    };
+  }
+}
+
+async function handleWorkspace(
+  workspaceDir: string,
+  mode: "collection" | "workspace",
+  res: ServerResponse,
+): Promise<void> {
+  const refs = await scanWorkspace(workspaceDir);
+  const collections = await Promise.all(
+    refs.map((ref) => describeCollection(ref.id, ref.rootDir)),
+  );
+  sendJson(res, 200, { mode, collections });
+}
+
+async function handleCollectionApi(
+  workspaceDir: string,
+  mode: "collection" | "workspace",
+  id: string,
+  rest: string[],
+  req: IncomingMessage,
+  res: ServerResponse,
+): Promise<void> {
+  const method = req.method ?? "GET";
+
+  // Collection-level operations don't need the dir to be valid yet.
+  if (rest.length === 0) {
+    if (method === "PATCH") {
+      const rootDir = await resolveCollectionDir(workspaceDir, mode, id);
+      const body = (await readBody(req)) as { name?: unknown };
+      await updateCollectionName(rootDir, requireString(body.name, "name"));
+      sendJson(res, 200, { ok: true });
+      return;
+    }
+    if (method === "DELETE") {
+      if (mode === "collection") {
+        throw new HttpError(400, "Cannot delete the collection this server was started on");
+      }
+      await deleteCollection(workspaceDir, id);
+      sendJson(res, 200, { ok: true });
+      return;
+    }
+    throw new HttpError(404, `No route for ${method} on a collection`);
   }
 
-  if (url.pathname.startsWith("/api/requests/")) {
-    const relativePath = decodeURIComponent(
-      url.pathname.slice("/api/requests/".length),
-    );
-    const filePath = resolveRequestPath(rootDir, relativePath);
+  const rootDir = await resolveCollectionDir(workspaceDir, mode, id);
+  const [resource, ...tail] = rest;
+  const tailPath = tail.join("/");
 
-    if (req.method === "GET") {
+  if (resource === "requests") {
+    if (method === "POST" && tailPath === "rename") {
+      const body = (await readBody(req)) as { from?: unknown; to?: unknown };
+      await renameRequest(
+        rootDir,
+        requireString(body.from, "from"),
+        requireString(body.to, "to"),
+      );
+      sendJson(res, 200, { ok: true });
+      return;
+    }
+    const filePath = resolveRequestFile(rootDir, tailPath);
+
+    if (method === "GET") {
       let content: string;
       try {
         content = await readFile(filePath, "utf8");
       } catch {
-        throw new HttpError(404, `${relativePath} not found`);
+        throw new HttpError(404, `${tailPath} not found`);
       }
-      sendJson(res, 200, { relativePath, content });
+      sendJson(res, 200, { relativePath: tailPath, content });
       return;
     }
-
-    if (req.method === "PUT") {
+    if (method === "PUT") {
       const body = (await readBody(req)) as { content?: unknown };
       if (typeof body.content !== "string") {
         throw new HttpError(400, "Expected JSON body: { content: string }");
@@ -189,14 +306,93 @@ async function handleApi(
       sendJson(res, 200, { ok: true });
       return;
     }
+    if (method === "DELETE") {
+      await deleteRequest(rootDir, tailPath);
+      sendJson(res, 200, { ok: true });
+      return;
+    }
   }
 
-  if (route === "POST /api/send") {
+  if (resource === "folders") {
+    if (method === "POST" && tail.length === 0) {
+      const body = (await readBody(req)) as { path?: unknown };
+      await createFolder(rootDir, requireString(body.path, "path"));
+      sendJson(res, 201, { ok: true });
+      return;
+    }
+    if (method === "POST" && tailPath === "rename") {
+      const body = (await readBody(req)) as { from?: unknown; to?: unknown };
+      await renameFolder(
+        rootDir,
+        requireString(body.from, "from"),
+        requireString(body.to, "to"),
+      );
+      sendJson(res, 200, { ok: true });
+      return;
+    }
+    if (method === "DELETE" && tail.length > 0) {
+      await deleteFolder(rootDir, tailPath);
+      sendJson(res, 200, { ok: true });
+      return;
+    }
+  }
+
+  if (resource === "environments") {
+    if (method === "POST" && tail.length === 0) {
+      const body = (await readBody(req)) as { name?: unknown };
+      await createEnvironment(rootDir, requireString(body.name, "name"));
+      sendJson(res, 201, { ok: true });
+      return;
+    }
+    if (method === "POST" && tailPath === "rename") {
+      const body = (await readBody(req)) as { from?: unknown; to?: unknown };
+      await renameEnvironment(
+        rootDir,
+        requireString(body.from, "from"),
+        requireString(body.to, "to"),
+      );
+      sendJson(res, 200, { ok: true });
+      return;
+    }
+    if (tail.length === 1) {
+      const name = tail[0]!;
+      if (method === "GET") {
+        resolveEnvironmentFile(rootDir, name); // validates the name
+        try {
+          const env = await loadEnvironment(rootDir, name);
+          sendJson(res, 200, { name, variables: env.variables });
+        } catch (error) {
+          throw new HttpError(404, (error as Error).message);
+        }
+        return;
+      }
+      if (method === "PUT") {
+        const body = (await readBody(req)) as { variables?: unknown };
+        const parsed = environmentFileSchema.safeParse({ variables: body.variables });
+        if (!parsed.success) {
+          throw new HttpError(
+            400,
+            "Expected JSON body: { variables: Record<string, string> }",
+          );
+        }
+        await writeEnvironment(rootDir, name, parsed.data.variables);
+        sendJson(res, 200, { ok: true });
+        return;
+      }
+      if (method === "DELETE") {
+        await deleteEnvironment(rootDir, name);
+        sendJson(res, 200, { ok: true });
+        return;
+      }
+    }
+  }
+
+  if (resource === "send" && method === "POST" && tail.length === 0) {
     const body = (await readBody(req)) as { path?: unknown; env?: unknown };
     if (typeof body.path !== "string") {
       throw new HttpError(400, "Expected JSON body: { path: string, env?: string }");
     }
-    resolveRequestPath(rootDir, body.path); // traversal guard
+    resolveRequestFile(rootDir, body.path); // traversal guard
     const loaded = await loadCollection(rootDir);
     const request = loaded.requests.find((r) => r.relativePath === body.path);
     if (!request) throw new HttpError(404, `${body.path} not found`);
@@ -209,7 +405,7 @@ async function handleApi(
     return;
   }
 
-  if (route === "POST /api/run") {
+  if (resource === "run" && method === "POST" && tail.length === 0) {
     const body = (await readBody(req)) as { env?: unknown; bail?: unknown };
     const loaded = await loadCollection(rootDir);
     const variables = await resolveVariables(
@@ -249,10 +445,57 @@ async function handleApi(
     return;
   }
 
-  // Formats a run the client already has (from the /api/run stream) as
-  // junit or html — stateless, mirroring the CLI's `quiver report`, so the
-  // collection never has to be executed a second time to get a report.
-  if (route === "POST /api/report") {
+  throw new HttpError(404, `No route for ${method} /api/collections/${id}/${rest.join("/")}`);
+}
+
+async function handleApi(
+  workspaceDir: string,
+  req: IncomingMessage,
+  res: ServerResponse,
+  url: URL,
+): Promise<void> {
+  // Split the RAW pathname so ids containing %2F stay one segment, then
+  // decode each segment. `/api/collections/nested%2Fbeta/run` and
+  // `/api/collections/nested/beta/run` both address collection nested/beta.
+  const segments = url.pathname.split("/").slice(1).map(decodeURIComponent);
+  const method = req.method ?? "GET";
+  const mode = (await isCollectionRoot(workspaceDir)) ? "collection" : "workspace";
+
+  if (method === "GET" && segments.length === 2 && segments[1] === "workspace") {
+    await handleWorkspace(workspaceDir, mode, res);
+    return;
+  }
+
+  if (segments[1] === "collections") {
+    if (segments.length === 2 && method === "POST") {
+      if (mode === "collection") {
+        throw new HttpError(
+          400,
+          "This server was started on a single collection; point quiver ui at a parent directory to manage several",
+        );
+      }
+      const body = (await readBody(req)) as { dirName?: unknown; name?: unknown };
+      const created = await createCollection(
+        workspaceDir,
+        requireString(body.dirName, "dirName"),
+        requireString(body.name, "name"),
+      );
+      sendJson(res, 201, { id: created.id, name: body.name });
+      return;
+    }
+    if (segments.length >= 3) {
+      // URL normalization strips "." path segments (even percent-encoded),
+      // so the root collection's id "." travels as the reserved segment "~".
+      const id = segments[2] === "~" ? "." : segments[2]!;
+      await handleCollectionApi(workspaceDir, mode, id, segments.slice(3), req, res);
+      return;
+    }
+  }
+
+  // Formats a run the client already has (from a run stream) as junit or
+  // html — stateless, mirroring the CLI's `quiver report`, so the collection
+  // never has to be executed a second time to get a report.
+  if (method === "POST" && segments.length === 2 && segments[1] === "report") {
     const body = (await readBody(req)) as {
       format?: unknown;
       name?: unknown;
@@ -278,7 +521,7 @@ async function handleApi(
     return;
   }
 
-  throw new HttpError(404, `No route for ${route}`);
+  throw new HttpError(404, `No route for ${method} ${url.pathname}`);
 }
 
 async function handleStatic(res: ServerResponse, pathname: string): Promise<void> {
@@ -307,19 +550,30 @@ async function handleStatic(res: ServerResponse, pathname: string): Promise<void
   }
 }
 
+const MUTATION_STATUS: Record<WorkspaceMutationError["code"], number> = {
+  invalid: 400,
+  "not-found": 404,
+  conflict: 409,
+};
+
 export async function startUiServer(
   options: UiServerOptions,
 ): Promise<RunningServer> {
-  const rootDir = path.resolve(options.rootDir);
+  const workspaceDir = path.resolve(options.workspaceDir);
   const host = options.host ?? "127.0.0.1";
 
   const server = createServer((req, res) => {
     const url = new URL(req.url ?? "/", `http://${req.headers.host ?? host}`);
     const handler = url.pathname.startsWith("/api/")
-      ? handleApi(rootDir, req, res, url)
+      ? handleApi(workspaceDir, req, res, url)
       : handleStatic(res, url.pathname);
     handler.catch((error: unknown) => {
-      const status = error instanceof HttpError ? error.status : 500;
+      const status =
+        error instanceof HttpError
+          ? error.status
+          : error instanceof WorkspaceMutationError
+            ? MUTATION_STATUS[error.code]
+            : 500;
       const message = error instanceof Error ? error.message : String(error);
       if (!res.headersSent) sendJson(res, status, { error: message });
       else res.end();

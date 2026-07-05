@@ -3,7 +3,7 @@ import path from "node:path";
 import { Command } from "commander";
 import pc from "picocolors";
 import { spawn } from "node:child_process";
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, stat, writeFile } from "node:fs/promises";
 import { startUiServer } from "@quiver/server";
 import {
   buildHtmlReport,
@@ -19,6 +19,7 @@ import {
   loadRequestFile,
   runCollection,
   runRequest,
+  scanWorkspace,
   toJsonSummary,
   type RunSummary,
 } from "@quiver/core";
@@ -282,14 +283,29 @@ program
 
 program
   .command("ui")
-  .description("Open the collection in the local web UI")
-  .argument("<dir>", "collection directory (contains collection.yaml)")
+  .description("Open a collection or a workspace of collections in the local web UI")
+  .argument(
+    "<dir>",
+    "collection directory (contains collection.yaml) or a workspace directory containing several",
+  )
   .option("-p, --port <port>", "port to listen on", "4123")
   .option("--no-open", "do not open the browser automatically")
   .action(async (dir: string, options: { port: string; open: boolean }) => {
-    await loadCollection(dir); // fail fast on a broken collection
+    try {
+      await stat(dir);
+    } catch {
+      fail(`${dir} does not exist`);
+    }
+    const collections = await scanWorkspace(dir);
+    if (collections.length === 0) {
+      console.log(
+        pc.yellow(
+          `No collections found under ${dir} — create your first one from the UI.`,
+        ),
+      );
+    }
     const { url } = await startUiServer({
-      rootDir: dir,
+      workspaceDir: dir,
       port: Number(options.port),
     });
     console.log(`quiver ui running at ${pc.bold(url)} — Ctrl-C to stop`);

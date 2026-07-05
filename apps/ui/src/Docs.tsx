@@ -14,13 +14,36 @@ export function Docs() {
         cloud account and nothing to sync.
       </p>
 
+      <h2>Collections and workspaces</h2>
+      <p>
+        A <strong>collection</strong> is a folder of requests with a{" "}
+        <code>collection.yaml</code> inside. The sidebar shows every
+        collection quiver found under the directory it was started on — a{" "}
+        <strong>workspace</strong>. The <strong>+ New</strong> button creates
+        collections, requests, folders, and environments; hovering a
+        collection, folder, request, or environment reveals a{" "}
+        <strong>⋯</strong> menu with rename and delete.
+      </p>
+      <p>
+        Everything those menus do is an ordinary file operation: a new
+        collection is a new folder with a <code>collection.yaml</code>, a
+        delete is a deleted file. If your workspace is a Git repository,
+        deletes are recoverable with <code>git checkout</code> until you
+        commit. The environment picker and <strong>▶ Run all</strong> in the
+        top bar apply to the collection you&apos;re working in, and each
+        collection remembers its own selected environment.
+      </p>
+
       <h2>Creating a request</h2>
       <p>
-        Click <strong>+ New</strong> at the top of the sidebar and give the
-        request a path like <code>users/create-user</code>. Folders group
-        related requests; they are created automatically. You get a template
-        to fill in, and the request appears in the sidebar after your first
-        save.
+        Click <strong>+ New</strong> at the top of the sidebar (or a folder&apos;s{" "}
+        <strong>⋯</strong> menu) and give the request a path like{" "}
+        <code>users/create-user</code>. Folders group related requests; they
+        are created automatically. You get a template to fill in, and the
+        request appears in the sidebar after your first save. Use{" "}
+        <strong>Rename file…</strong> in a request&apos;s ⋯ menu to change its
+        file name — that&apos;s also how you change its position in the run
+        order.
       </p>
       <p>
         A request works the way you&apos;d expect from other API clients: the
@@ -86,7 +109,10 @@ variables:
 `}</Code>
       <p>
         The same collection runs against local, staging, or production just
-        by switching environments — the requests never change.
+        by switching environments — the requests never change. Create an
+        environment from <strong>+ New</strong>, then click it in the sidebar
+        to edit its variables in a table — no YAML needed. Saving from the
+        table rewrites the file, so YAML comments in it don&apos;t survive.
       </p>
       <p>
         <strong>Secrets:</strong> <code>{"{{$env.NAME}}"}</code> reads from

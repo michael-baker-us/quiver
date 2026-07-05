@@ -1,0 +1,9 @@
+name: List endpoint answers
+method: GET
+url: "{{baseUrl}}/todos"
+query:
+  _limit: "1"
+tests:
+  - status: 200
+  - jsonpath: $[0].id
+    exists: true

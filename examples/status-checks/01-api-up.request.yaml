@@ -1,0 +1,6 @@
+name: API is up
+method: GET
+url: "{{baseUrl}}/todos/1"
+tests:
+  - status: 200
+  - responseTimeBelow: 5000
