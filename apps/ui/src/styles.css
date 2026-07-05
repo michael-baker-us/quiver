@@ -1377,3 +1377,106 @@ textarea.editor {
   width: auto;
   padding: 0.15rem 0.35rem;
 }
+
+/* --- variable highlighting ({{var}} in URL and body, Postman-style) --- */
+
+.var-wrap {
+  position: relative;
+  display: flex;
+}
+
+.var-wrap.block {
+  display: block;
+}
+
+.var-wrap .var-control {
+  flex: 1;
+  min-width: 0;
+  color: transparent;
+  caret-color: var(--text);
+}
+
+.var-wrap .var-control::placeholder {
+  color: var(--text-faint);
+}
+
+.var-wrap .var-control::selection {
+  color: transparent;
+  background: var(--accent-soft);
+}
+
+.var-wrap .var-control:disabled + .var-mirror {
+  opacity: 0.55;
+}
+
+/* Paints the control's text; metrics (font, padding, border widths) are
+   copied from the control at runtime so the glyphs line up exactly. */
+.var-mirror {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  box-sizing: border-box;
+  border: 0 solid transparent;
+  background: transparent;
+  color: var(--text);
+  white-space: pre;
+}
+
+.var-mirror.multiline {
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+}
+
+.var-token {
+  pointer-events: auto;
+  cursor: text;
+  color: var(--accent);
+  font-weight: 600;
+  border-radius: 4px;
+  background: var(--accent-soft);
+}
+
+.var-token.is-missing {
+  color: var(--warn);
+  background: transparent;
+  text-decoration: underline wavy var(--warn);
+  text-underline-offset: 3px;
+}
+
+/* Portaled to <body> so it renders above panes regardless of their
+   overflow/stacking contexts. Coordinates are viewport-relative. */
+.var-tooltip {
+  position: fixed;
+  z-index: 60;
+  transform: translateX(-50%);
+  max-width: 360px;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--bg-panel);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
+  font-size: 0.8rem;
+  pointer-events: none;
+  white-space: normal;
+}
+
+.var-tooltip-name {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  color: var(--text-dim);
+  margin-bottom: 0.2rem;
+}
+
+.var-tooltip-value {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  word-break: break-all;
+}
+
+.var-tooltip-note {
+  color: var(--text-dim);
+}
+
+.url-bar-group .var-wrap {
+  flex: 1;
+  min-width: 0;
+}

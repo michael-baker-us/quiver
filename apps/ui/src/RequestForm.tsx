@@ -5,6 +5,7 @@ import {
   type RequestFormData,
   type TestFormRow,
 } from "./requestFormData.js";
+import { VariableTextarea } from "./VariableInput.js";
 
 export type FormTab =
   | "params"
@@ -199,10 +200,13 @@ export function RequestFormTab({
   tab,
   value,
   onChange,
+  variables = {},
 }: {
   tab: FormTab;
   value: RequestFormData;
   onChange: (next: RequestFormData) => void;
+  /** Current environment's variables, for {{var}} highlighting and tooltips. */
+  variables?: Record<string, string>;
 }) {
   function set<K extends keyof RequestFormData>(key: K, next: RequestFormData[K]) {
     onChange({ ...value, [key]: next });
@@ -311,11 +315,11 @@ export function RequestFormTab({
           </select>
           {value.bodyType === "json" && (
             <>
-              <textarea
+              <VariableTextarea
                 className="editor small"
-                spellCheck={false}
                 value={value.bodyJsonText}
-                onChange={(e) => set("bodyJsonText", e.target.value)}
+                onChange={(text) => set("bodyJsonText", text)}
+                variables={variables}
               />
               {jsonBodyError && (
                 <div className="field-error">Not valid JSON: {jsonBodyError}</div>
@@ -323,11 +327,11 @@ export function RequestFormTab({
             </>
           )}
           {isRawTextBodyType(value.bodyType) && (
-            <textarea
+            <VariableTextarea
               className="editor small"
-              spellCheck={false}
               value={value.bodyPlainText}
-              onChange={(e) => set("bodyPlainText", e.target.value)}
+              onChange={(text) => set("bodyPlainText", text)}
+              variables={variables}
             />
           )}
           {value.bodyType === "form" && (

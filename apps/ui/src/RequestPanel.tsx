@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { getRequestFile, saveRequestFile, sendRequest, type SendResult } from "./api.js";
+import { getEnvironment, getRequestFile, saveRequestFile, sendRequest, type SendResult } from "./api.js";
+import { VariableInput } from "./VariableInput.js";
 import { ResponsePane } from "./ResponsePane.js";
 import { RequestFormTab, TAB_LABELS, tabBadge, type FormTab } from "./RequestForm.js";
 import { DEFAULT_SPLIT, MAX_SPLIT, MIN_SPLIT, SplitPane, type SplitOrientation } from "./SplitPane.js";
@@ -42,6 +43,9 @@ export function RequestPanel({
   const [splitOrientation, setSplitOrientation] = useState<SplitOrientation>(() =>
     localStorage.getItem("quiver-split-orientation") === "row" ? "row" : "column",
   );
+  // For {{var}} hover tooltips. Loaded when the selected environment changes;
+  // edits made in the environment panel show up next time this panel mounts.
+  const [envVars, setEnvVars] = useState<Record<string, string>>({});
   const [splitRatio, setSplitRatio] = useState<number>(() => {
     const stored = Number(localStorage.getItem("quiver-split-ratio"));
     return stored >= MIN_SPLIT && stored <= MAX_SPLIT ? stored : DEFAULT_SPLIT;
@@ -74,6 +78,20 @@ export function RequestPanel({
       setMode("yaml");
     }
   }
+
+  useEffect(() => {
+    if (!env) {
+      setEnvVars({});
+      return;
+    }
+    let cancelled = false;
+    getEnvironment(collectionId, env)
+      .then((vars) => !cancelled && setEnvVars(vars))
+      .catch(() => !cancelled && setEnvVars({}));
+    return () => {
+      cancelled = true;
+    };
+  }, [collectionId, env]);
 
   useEffect(() => {
     if (isNew) {
@@ -239,12 +257,12 @@ export function RequestPanel({
               </option>
             ))}
           </select>
-          <input
+          <VariableInput
             value={barData?.url ?? ""}
             placeholder="{{baseUrl}}/path"
-            spellCheck={false}
             disabled={!formEditable}
-            onChange={(e) => formData && setFormData({ ...formData, url: e.target.value })}
+            variables={envVars}
+            onChange={(url) => formData && setFormData({ ...formData, url })}
           />
         </div>
         <button onClick={() => void save()} disabled={!dirty || busy}>
@@ -310,7 +328,12 @@ export function RequestPanel({
             {mode === "form" ? (
               formData ? (
                 <div className="tab-body">
-                  <RequestFormTab tab={tab} value={formData} onChange={setFormData} />
+                  <RequestFormTab
+                    tab={tab}
+                    value={formData}
+                    onChange={setFormData}
+                    variables={envVars}
+                  />
                 </div>
               ) : (
                 <div className="problem">
