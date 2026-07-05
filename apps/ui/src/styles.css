@@ -1164,6 +1164,13 @@ textarea.editor {
   margin: 0;
 }
 
+/* Importer warnings shown after an OpenAPI import; long specs can emit many. */
+.modal .import-warnings {
+  padding-left: 1.1rem;
+  max-height: 10rem;
+  overflow-y: auto;
+}
+
 .modal-actions {
   display: flex;
   justify-content: flex-end;

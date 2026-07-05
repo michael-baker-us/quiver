@@ -113,6 +113,9 @@ JSONPath support is the practical subset: `$.a.b`, `$[0]`, `$["key with spaces"]
 quiver import openapi.yaml --out collections/my-api
 ```
 
+Also available in the UI: **+ New → Import OpenAPI spec…** creates a new
+collection in the workspace from a YAML or JSON spec file.
+
 Generates one request file per operation, grouped by tag, with:
 
 - example request bodies synthesized from the JSON schemas (`example` /

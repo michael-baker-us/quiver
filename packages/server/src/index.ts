@@ -15,6 +15,8 @@ import {
   deleteFolder,
   deleteRequest,
   environmentFileSchema,
+  importCollectionFiles,
+  importOpenApi,
   isJsonSummary,
   listEnvironments,
   listFolders,
@@ -491,6 +493,43 @@ async function handleApi(
       await handleCollectionApi(workspaceDir, mode, id, segments.slice(3), req, res);
       return;
     }
+  }
+
+  // Imports an OpenAPI 3.x spec as a brand-new collection. Lives outside
+  // /api/collections/<id> because the collection doesn't exist yet — the id
+  // is chosen here — and to leave room for other import formats later.
+  if (method === "POST" && segments.length === 3 && segments[1] === "import" && segments[2] === "openapi") {
+    if (mode === "collection") {
+      throw new HttpError(
+        400,
+        "This server was started on a single collection; point quiver ui at a parent directory to import a new collection",
+      );
+    }
+    const body = (await readBody(req)) as { dirName?: unknown; spec?: unknown };
+    const dirName = requireString(body.dirName, "dirName");
+    const specText = requireString(body.spec, "spec");
+    let spec: unknown;
+    try {
+      spec = parseYaml(specText); // YAML is a superset of JSON, so this handles both
+    } catch (error) {
+      throw new HttpError(400, `Spec is not valid YAML or JSON: ${(error as Error).message}`);
+    }
+    let imported: ReturnType<typeof importOpenApi>;
+    try {
+      imported = importOpenApi(spec);
+    } catch (error) {
+      throw new HttpError(400, (error as Error).message);
+    }
+    const created = await importCollectionFiles(workspaceDir, dirName, imported.files);
+    sendJson(res, 201, {
+      id: created.id,
+      name: imported.collectionName,
+      // Every imported file except collection.yaml and the default
+      // environment is a request — same arithmetic as the CLI.
+      requests: imported.files.size - 2,
+      warnings: imported.warnings,
+    });
+    return;
   }
 
   // Moving a request can cross collection boundaries (drag-and-drop in the

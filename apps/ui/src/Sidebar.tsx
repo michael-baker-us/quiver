@@ -22,6 +22,7 @@ export interface Draft {
 /** Everything the sidebar can ask the app to do; App owns dialogs and API calls. */
 export type SidebarAction =
   | { type: "new-collection" }
+  | { type: "import-openapi" }
   | { type: "new-request"; collectionId: string; folderPrefix?: string }
   | { type: "new-folder"; collectionId: string; parent?: string }
   | { type: "new-environment"; collectionId: string }
@@ -122,7 +123,10 @@ export function Sidebar({
   function newMenuItems(): MenuItem[] {
     const items: MenuItem[] = [];
     if (!single) {
-      items.push({ label: "New collection…", onSelect: () => onAction({ type: "new-collection" }) });
+      items.push(
+        { label: "New collection…", onSelect: () => onAction({ type: "new-collection" }) },
+        { label: "Import OpenAPI spec…", onSelect: () => onAction({ type: "import-openapi" }) },
+      );
     }
     const target = activeCollectionId;
     if (target !== null) {

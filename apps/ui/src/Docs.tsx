@@ -35,6 +35,14 @@ export function Docs() {
         top bar apply to the collection you&apos;re working in, and each
         collection remembers its own selected environment.
       </p>
+      <p>
+        Already have an OpenAPI 3.x spec? <strong>+ New → Import OpenAPI
+        spec…</strong> generates a whole collection from it — one request per
+        operation, grouped by tag, with a <code>baseUrl</code> environment
+        taken from the spec&apos;s server URL and auth mapped to{" "}
+        <code>{"{{$env.*}}"}</code> placeholders so no secrets land in the
+        files.
+      </p>
 
       <h2>Creating a request</h2>
       <p>

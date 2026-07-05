@@ -265,6 +265,80 @@ describe("workspace mode", () => {
     expect(again.status).toBe(404);
   });
 
+  it("imports an OpenAPI spec as a new collection", async () => {
+    const spec = JSON.stringify({
+      openapi: "3.0.3",
+      info: { title: "Petstore", version: "1.0.0" },
+      servers: [{ url: "https://petstore.example.test/v1" }],
+      paths: {
+        "/pets": {
+          get: {
+            operationId: "listPets",
+            tags: ["pets"],
+            responses: { "200": { description: "ok" } },
+          },
+          post: {
+            operationId: "createPet",
+            tags: ["pets"],
+            responses: { "201": { description: "created" } },
+          },
+        },
+      },
+    });
+
+    const imported = await fetch(`${ui.url}/api/import/openapi`, {
+      method: "POST",
+      body: JSON.stringify({ dirName: "petstore", spec }),
+    });
+    expect(imported.status).toBe(201);
+    expect(await imported.json()).toEqual({
+      id: "petstore",
+      name: "Petstore",
+      requests: 2,
+      warnings: [],
+    });
+
+    const listing = await fetch(`${ui.url}/api/workspace`);
+    const data = (await listing.json()) as {
+      collections: {
+        id: string;
+        name: string;
+        environments: string[];
+        requests: { relativePath: string }[];
+      }[];
+    };
+    const petstore = data.collections.find((c) => c.id === "petstore")!;
+    expect(petstore.name).toBe("Petstore");
+    expect(petstore.environments).toEqual(["default"]);
+    expect(petstore.requests.map((r) => r.relativePath).sort()).toEqual([
+      "pets/create-pet.request.yaml",
+      "pets/list-pets.request.yaml",
+    ]);
+
+    const dup = await fetch(`${ui.url}/api/import/openapi`, {
+      method: "POST",
+      body: JSON.stringify({ dirName: "petstore", spec }),
+    });
+    expect(dup.status).toBe(409);
+
+    await fetch(`${ui.url}/api/collections/petstore`, { method: "DELETE" });
+  });
+
+  it("rejects specs that are not OpenAPI 3.x with a 400", async () => {
+    const swagger = await fetch(`${ui.url}/api/import/openapi`, {
+      method: "POST",
+      body: JSON.stringify({ dirName: "old", spec: 'swagger: "2.0"' }),
+    });
+    expect(swagger.status).toBe(400);
+    expect(((await swagger.json()) as { error: string }).error).toContain("Swagger 2.0");
+
+    const garbage = await fetch(`${ui.url}/api/import/openapi`, {
+      method: "POST",
+      body: JSON.stringify({ dirName: "bad", spec: "{" }),
+    });
+    expect(garbage.status).toBe(400);
+  });
+
   it("creates, renames, and deletes folders", async () => {
     const created = await fetch(`${ui.url}/api/collections/alpha/folders`, {
       method: "POST",
@@ -549,6 +623,12 @@ describe("collection mode", () => {
       body: JSON.stringify({ dirName: "sub", name: "Sub" }),
     });
     expect(create.status).toBe(400);
+
+    const imported = await fetch(`${ui.url}/api/import/openapi`, {
+      method: "POST",
+      body: JSON.stringify({ dirName: "sub", spec: 'openapi: "3.0.0"' }),
+    });
+    expect(imported.status).toBe(400);
 
     const del = await fetch(`${ui.url}/api/collections/~`, { method: "DELETE" });
     expect(del.status).toBe(400);

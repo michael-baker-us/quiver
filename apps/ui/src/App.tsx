@@ -23,6 +23,7 @@ import { RequestPanel } from "./RequestPanel.js";
 import { EnvironmentPanel } from "./EnvironmentPanel.js";
 import { RunPanel } from "./RunPanel.js";
 import { Docs } from "./Docs.js";
+import { ImportOpenApiDialog } from "./ImportOpenApiDialog.js";
 import { PromptDialog } from "./PromptDialog.js";
 import { ConfirmDialog } from "./ConfirmDialog.js";
 import { toCollectionDirName, toEnvironmentName, toFolderPath, toRequestPath } from "./names.js";
@@ -197,6 +198,16 @@ export function App() {
             onSubmit={async (raw, dirName) => {
               await createCollection(dirName, raw.trim());
               setActiveId(dirName);
+              await refresh();
+            }}
+            onClose={() => setDialog(null)}
+          />
+        );
+      case "import-openapi":
+        return (
+          <ImportOpenApiDialog
+            onImported={async (result) => {
+              setActiveId(result.id);
               await refresh();
             }}
             onClose={() => setDialog(null)}
@@ -599,6 +610,9 @@ export function App() {
               <p>
                 <button className="primary" onClick={() => setDialog({ type: "new-collection" })}>
                   Create your first collection
+                </button>{" "}
+                <button className="ghost" onClick={() => setDialog({ type: "import-openapi" })}>
+                  Import an OpenAPI spec
                 </button>
               </p>
               <p className="hint">

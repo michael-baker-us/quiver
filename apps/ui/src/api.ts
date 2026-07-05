@@ -140,6 +140,27 @@ export async function createCollection(dirName: string, name: string): Promise<v
   await jsonRequest("/api/collections", "POST", { dirName, name });
 }
 
+export interface ImportOpenApiResult {
+  id: string;
+  name: string;
+  requests: number;
+  warnings: string[];
+}
+
+/** Creates a new collection from raw OpenAPI 3.x spec text (YAML or JSON). */
+export async function importOpenApiSpec(
+  dirName: string,
+  spec: string,
+): Promise<ImportOpenApiResult> {
+  const res = await checkOk(
+    await fetch("/api/import/openapi", {
+      method: "POST",
+      body: JSON.stringify({ dirName, spec }),
+    }),
+  );
+  return (await res.json()) as ImportOpenApiResult;
+}
+
 export async function renameCollection(collectionId: string, name: string): Promise<void> {
   await jsonRequest(collectionUrl(collectionId), "PATCH", { name });
 }

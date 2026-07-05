@@ -81,12 +81,15 @@ async function assertRenameTargetFree(fromAbs: string, toAbs: string): Promise<v
 // Collections
 // ---------------------------------------------------------------------------
 
-export async function createCollection(
+/**
+ * Validates a new collection's directory name and location (depth, segment
+ * names, no existing or ancestor collection), returning the absolute target
+ * directory without creating it.
+ */
+async function prepareCollectionTarget(
   workspaceDir: string,
   dirName: string,
-  name: string,
-): Promise<{ id: string }> {
-  if (name.trim() === "") throw invalid("Collection name must not be empty");
+): Promise<string> {
   const segments = dirName.split("/");
   if (segments.length > WORKSPACE_SCAN_DEPTH) {
     throw invalid(`Collection directory can be at most ${WORKSPACE_SCAN_DEPTH} levels deep`);
@@ -106,8 +109,41 @@ export async function createCollection(
       );
     }
   }
+  return target;
+}
+
+export async function createCollection(
+  workspaceDir: string,
+  dirName: string,
+  name: string,
+): Promise<{ id: string }> {
+  if (name.trim() === "") throw invalid("Collection name must not be empty");
+  const target = await prepareCollectionTarget(workspaceDir, dirName);
   await mkdir(target, { recursive: true });
   await writeFile(path.join(target, COLLECTION_FILENAME), stringifyYaml({ name }));
+  return { id: dirName };
+}
+
+/**
+ * Writes a generated collection (e.g. from the OpenAPI importer) into a new
+ * directory: same guards as createCollection, then every file in one pass.
+ * Paths in `files` are validated against the target dir, so untrusted spec
+ * content cannot write outside it.
+ */
+export async function importCollectionFiles(
+  workspaceDir: string,
+  dirName: string,
+  files: ReadonlyMap<string, string>,
+): Promise<{ id: string }> {
+  if (!files.has(COLLECTION_FILENAME)) {
+    throw invalid(`Imported collection is missing ${COLLECTION_FILENAME}`);
+  }
+  const target = await prepareCollectionTarget(workspaceDir, dirName);
+  for (const [relativePath, content] of files) {
+    const fileTarget = resolveInside(target, relativePath);
+    await mkdir(path.dirname(fileTarget), { recursive: true });
+    await writeFile(fileTarget, content);
+  }
   return { id: dirName };
 }
 

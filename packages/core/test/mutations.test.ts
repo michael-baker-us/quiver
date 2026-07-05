@@ -11,6 +11,7 @@ import {
   deleteEnvironment,
   deleteFolder,
   deleteRequest,
+  importCollectionFiles,
   renameEnvironment,
   moveRequest,
   renameFolder,
@@ -80,6 +81,43 @@ describe("createCollection", () => {
   it("conflicts when a collection already exists there", async () => {
     await createCollection(dir, "my-api", "My API");
     await expectError(createCollection(dir, "my-api", "Again"), "conflict");
+  });
+});
+
+describe("importCollectionFiles", () => {
+  const files = new Map([
+    ["collection.yaml", "name: Imported\n"],
+    ["environments/default.yaml", "variables:\n  baseUrl: http://example.test\n"],
+    ["pets/list-pets.request.yaml", REQUEST_YAML],
+  ]);
+
+  it("writes every file under the new collection directory", async () => {
+    const { id } = await importCollectionFiles(dir, "imported", files);
+    expect(id).toBe("imported");
+    for (const [relativePath, content] of files) {
+      expect(await readFile(path.join(dir, "imported", relativePath), "utf8")).toBe(content);
+    }
+  });
+
+  it("requires collection.yaml among the files", async () => {
+    await expectError(
+      importCollectionFiles(dir, "x", new Map([["a.request.yaml", REQUEST_YAML]])),
+      "invalid",
+    );
+  });
+
+  it("applies the same guards as createCollection", async () => {
+    await expectError(importCollectionFiles(dir, "../escape", files), "invalid");
+    await createCollection(dir, "taken", "Taken");
+    await expectError(importCollectionFiles(dir, "taken", files), "conflict");
+  });
+
+  it("rejects file paths that escape the collection directory", async () => {
+    const evil = new Map([
+      ["collection.yaml", "name: Evil\n"],
+      ["../outside.request.yaml", REQUEST_YAML],
+    ]);
+    await expectError(importCollectionFiles(dir, "evil", evil), "invalid");
   });
 });
 
