@@ -1,0 +1,15 @@
+name: Post a CSV body
+method: POST
+url: "{{baseUrl}}/post"
+body:
+  type: csv
+  content: |
+    id,name,role
+    1,Ada,engineer
+    2,Grace,admiral
+tests:
+  - status: 200
+  - jsonpath: $.headers.Content-Type
+    contains: text/csv
+  - jsonpath: $.data
+    contains: 1,Ada,engineer

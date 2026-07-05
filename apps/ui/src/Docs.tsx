@@ -82,7 +82,7 @@ auth:
   type: bearer               # none | bearer | basic | apikey
   token: "{{$env.API_TOKEN}}"
 body:
-  type: json                 # json | text | form
+  type: json                 # json | text | xml | csv | form
   content:
     email: "ada@example.com"
 tests:

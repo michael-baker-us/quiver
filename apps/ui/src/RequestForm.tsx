@@ -1,4 +1,5 @@
 import {
+  isRawTextBodyType,
   newTestRow,
   type KeyValueRow,
   type RequestFormData,
@@ -304,6 +305,8 @@ export function RequestFormTab({
             <option value="none">None</option>
             <option value="json">JSON</option>
             <option value="text">Plain text</option>
+            <option value="xml">XML (application/xml)</option>
+            <option value="csv">CSV (text/csv)</option>
             <option value="form">Form (application/x-www-form-urlencoded)</option>
           </select>
           {value.bodyType === "json" && (
@@ -319,7 +322,7 @@ export function RequestFormTab({
               )}
             </>
           )}
-          {value.bodyType === "text" && (
+          {isRawTextBodyType(value.bodyType) && (
             <textarea
               className="editor small"
               spellCheck={false}

@@ -65,7 +65,7 @@ auth:
   type: bearer            # none | bearer | basic | apikey
   token: "{{authToken}}"
 body:
-  type: json              # json | text | form
+  type: json              # json | text | xml | csv | form
   content:
     title: Hello
 tests:

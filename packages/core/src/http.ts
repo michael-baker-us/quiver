@@ -64,22 +64,31 @@ function applyAuth(headers: Headers, auth: Auth | undefined): string[] {
   }
 }
 
+/**
+ * Content-Type applied per body type when the request doesn't set one
+ * explicitly. Shared with the k6 exporter so generated scripts send the
+ * same headers quiver's own runtime would.
+ */
+export const DEFAULT_BODY_CONTENT_TYPES = {
+  json: "application/json",
+  text: "text/plain",
+  xml: "application/xml",
+  csv: "text/csv",
+  form: "application/x-www-form-urlencoded",
+} as const satisfies Record<RequestBody["type"], string>;
+
 function serializeBody(headers: Headers, body: RequestBody): string {
+  if (!headers.has("Content-Type")) {
+    headers.set("Content-Type", DEFAULT_BODY_CONTENT_TYPES[body.type]);
+  }
   switch (body.type) {
     case "json":
-      if (!headers.has("Content-Type")) {
-        headers.set("Content-Type", "application/json");
-      }
       return JSON.stringify(body.content);
     case "text":
-      if (!headers.has("Content-Type")) {
-        headers.set("Content-Type", "text/plain");
-      }
+    case "xml":
+    case "csv":
       return body.content;
     case "form":
-      if (!headers.has("Content-Type")) {
-        headers.set("Content-Type", "application/x-www-form-urlencoded");
-      }
       return new URLSearchParams(body.content).toString();
   }
 }

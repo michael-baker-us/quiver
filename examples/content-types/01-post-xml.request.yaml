@@ -1,0 +1,19 @@
+name: Post an XML body
+method: POST
+url: "{{baseUrl}}/post"
+body:
+  type: xml
+  content: >
+    <?xml version="1.0" encoding="UTF-8"?>
+
+    <note>
+      <to>Ada</to>
+      <from>quiver</from>
+      <message>Sent as application/xml unless a Content-Type header overrides it</message>
+    </note>
+tests:
+  - status: 200
+  - jsonpath: $.headers.Content-Type
+    contains: application/xml
+  - jsonpath: $.data
+    contains: <to>Ada</to>

@@ -30,6 +30,8 @@ export const authSchema = z.discriminatedUnion("type", [
 export const bodySchema = z.union([
   z.object({ type: z.literal("json"), content: z.unknown() }),
   z.object({ type: z.literal("text"), content: z.string() }),
+  z.object({ type: z.literal("xml"), content: z.string() }),
+  z.object({ type: z.literal("csv"), content: z.string() }),
   z.object({ type: z.literal("form"), content: stringMap }),
 ]);
 

@@ -110,6 +110,12 @@ describe("toFormData / fromFormData round trip", () => {
       content: "hello",
     });
     expect(
+      roundTrip({ ...base, body: { type: "xml", content: "<note><to>Ada</to></note>" } }).body,
+    ).toEqual({ type: "xml", content: "<note><to>Ada</to></note>" });
+    expect(
+      roundTrip({ ...base, body: { type: "csv", content: "id,name\n1,Ada" } }).body,
+    ).toEqual({ type: "csv", content: "id,name\n1,Ada" });
+    expect(
       roundTrip({ ...base, body: { type: "form", content: { a: "1" } } }).body,
     ).toEqual({ type: "form", content: { a: "1" } });
   });
@@ -178,6 +184,16 @@ describe("parseRequestContent", () => {
   it("reports missing required fields", () => {
     const result = parseRequestContent("name: Only a name\n");
     expect(result).toHaveProperty("error");
+  });
+
+  it("rejects a body type the form cannot represent, so it is never dropped on save", () => {
+    const result = parseRequestContent(
+      ["method: POST", "url: x", "body:", "  type: graphql", "  content: query {}"].join("\n"),
+    );
+    expect(result).toHaveProperty("error");
+    if ("error" in result) {
+      expect(result.error).toContain('"graphql"');
+    }
   });
 
   it("round-trips a full request through stringifyFormData", () => {

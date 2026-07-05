@@ -1,4 +1,5 @@
 import type { CollectionDefinition, HttpMethod, RequestDefinition } from "./schema.js";
+import { DEFAULT_BODY_CONTENT_TYPES } from "./http.js";
 import type { LoadedCollection } from "./loader.js";
 
 export interface K6ExportOptions {
@@ -127,8 +128,10 @@ function buildHeaders(
       `${JSON.stringify(def.auth.header)}: ${toJsTemplateLiteral(def.auth.value, envVars, capturedNames)},`,
     );
   }
-  if (def.body?.type === "json" && !merged["Content-Type"]) {
-    lines.push(`"Content-Type": "application/json",`);
+  // Mirror the runtime's Content-Type defaulting, except for form bodies:
+  // k6 sets application/x-www-form-urlencoded itself for plain-object bodies.
+  if (def.body && def.body.type !== "form" && !merged["Content-Type"]) {
+    lines.push(`"Content-Type": ${JSON.stringify(DEFAULT_BODY_CONTENT_TYPES[def.body.type])},`);
   }
   return lines;
 }
@@ -157,7 +160,9 @@ function buildBodyExpr(
   capturedNames: ReadonlySet<string>,
 ): string {
   if (!def.body) return "null";
-  if (def.body.type === "text") return toJsTemplateLiteral(def.body.content, envVars, capturedNames);
+  if (def.body.type === "text" || def.body.type === "xml" || def.body.type === "csv") {
+    return toJsTemplateLiteral(def.body.content, envVars, capturedNames);
+  }
   if (def.body.type === "form") {
     const entries = Object.entries(def.body.content)
       .map(([key, value]) => `${JSON.stringify(key)}: ${toJsTemplateLiteral(value, envVars, capturedNames)}`)

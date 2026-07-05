@@ -1,0 +1,8 @@
+name: Content Types Demo
+description: >
+  XML and CSV request bodies posted to httpbin.org, which echoes the
+  request back as JSON so the tests can verify what was sent.
+  Run it with: quiver run examples/content-types --env default
+defaults:
+  headers:
+    Accept: application/json

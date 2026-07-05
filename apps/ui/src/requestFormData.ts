@@ -7,7 +7,18 @@ export interface KeyValueRow {
 }
 
 export type AuthType = "none" | "bearer" | "basic" | "apikey";
-export type BodyType = "none" | "json" | "text" | "form";
+export type BodyType = "none" | "json" | "text" | "xml" | "csv" | "form";
+
+/** Every body type the form editor can represent without losing data. */
+const FORM_BODY_TYPES: readonly string[] = ["json", "text", "xml", "csv", "form"];
+
+/** Body types whose content is a single raw string edited in one textarea. */
+export const RAW_TEXT_BODY_TYPES = ["text", "xml", "csv"] as const;
+export type RawTextBodyType = (typeof RAW_TEXT_BODY_TYPES)[number];
+
+export function isRawTextBodyType(type: BodyType): type is RawTextBodyType {
+  return (RAW_TEXT_BODY_TYPES as readonly string[]).includes(type);
+}
 
 export type TestFormRow =
   | { kind: "status"; status: string }
@@ -217,7 +228,10 @@ export function toFormData(def: Partial<RequestDefinition>): RequestFormData {
     bodyType: body?.type ?? "none",
     bodyJsonText:
       body?.type === "json" ? JSON.stringify(body.content, null, 2) : base.bodyJsonText,
-    bodyPlainText: body?.type === "text" ? body.content : "",
+    bodyPlainText:
+      body?.type === "text" || body?.type === "xml" || body?.type === "csv"
+        ? body.content
+        : "",
     bodyForm: body?.type === "form" ? toKvRows(body.content) : [],
     tests: def.tests && def.tests.length > 0 ? def.tests.map(testToFormRow) : [],
     capture: toKvRows(def.capture),
@@ -269,8 +283,8 @@ export function fromFormData(form: RequestFormData): Record<string, unknown> {
       }
     }
     result.body = { type: "json", content };
-  } else if (form.bodyType === "text") {
-    result.body = { type: "text", content: form.bodyPlainText };
+  } else if (isRawTextBodyType(form.bodyType)) {
+    result.body = { type: form.bodyType, content: form.bodyPlainText };
   } else if (form.bodyType === "form") {
     result.body = { type: "form", content: fromKvRows(form.bodyForm) };
   }
@@ -308,6 +322,13 @@ export function parseRequestContent(content: string): ParseResult {
   const record = doc as Partial<RequestDefinition>;
   if (typeof record.method !== "string" || typeof record.url !== "string") {
     return { error: "Missing required \"method\" or \"url\" field" };
+  }
+  // A body type this build doesn't know must not reach the form: toFormData
+  // would show it as empty and the next save would silently drop the body.
+  // Refusing here keeps the request in YAML mode, which is lossless.
+  const bodyType = (record.body as { type?: unknown } | undefined)?.type;
+  if (bodyType !== undefined && !FORM_BODY_TYPES.includes(bodyType as string)) {
+    return { error: `Body type "${String(bodyType)}" is not supported by the form editor` };
   }
   return { data: toFormData(record) };
 }
