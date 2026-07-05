@@ -252,6 +252,18 @@ textarea::placeholder {
   min-height: 0;
 }
 
+/* Dismissible banner for failures with no dialog to report in (drag-and-drop moves). */
+.action-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.4rem 0.75rem;
+  background: var(--fail-soft);
+  color: var(--fail);
+  border-bottom: 1px solid var(--border);
+}
+
 /* ---- sidebar ---- */
 .sidebar {
   width: 280px;
@@ -1169,6 +1181,18 @@ textarea.editor {
 .tree-row > .request-row {
   flex: 1;
   min-width: 0;
+}
+
+/* Drag-and-drop: the row under the pointer while dragging a request. */
+.tree-row.drop-target {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  border-radius: 6px;
+  background: var(--accent-soft);
+}
+
+.tree-row.dragging {
+  opacity: 0.45;
 }
 
 .row-menu {

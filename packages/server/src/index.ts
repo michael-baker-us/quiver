@@ -20,6 +20,7 @@ import {
   listFolders,
   loadCollection,
   loadEnvironment,
+  moveRequest,
   renameEnvironment,
   renameFolder,
   renameRequest,
@@ -490,6 +491,36 @@ async function handleApi(
       await handleCollectionApi(workspaceDir, mode, id, segments.slice(3), req, res);
       return;
     }
+  }
+
+  // Moving a request can cross collection boundaries (drag-and-drop in the
+  // sidebar), so it lives at the workspace level rather than under one
+  // collection. Within-collection moves also route here.
+  if (method === "POST" && segments.length === 3 && segments[1] === "requests" && segments[2] === "move") {
+    const body = (await readBody(req)) as {
+      fromCollection?: unknown;
+      fromPath?: unknown;
+      toCollection?: unknown;
+      toPath?: unknown;
+    };
+    const fromDir = await resolveCollectionDir(
+      workspaceDir,
+      mode,
+      requireString(body.fromCollection, "fromCollection"),
+    );
+    const toDir = await resolveCollectionDir(
+      workspaceDir,
+      mode,
+      requireString(body.toCollection, "toCollection"),
+    );
+    await moveRequest(
+      fromDir,
+      requireString(body.fromPath, "fromPath"),
+      toDir,
+      requireString(body.toPath, "toPath"),
+    );
+    sendJson(res, 200, { ok: true });
+    return;
   }
 
   // Formats a run the client already has (from a run stream) as junit or

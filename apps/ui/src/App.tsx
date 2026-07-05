@@ -8,6 +8,7 @@ import {
   deleteFolder,
   deleteRequest,
   getWorkspace,
+  moveRequest,
   renameCollection,
   renameEnvironment,
   renameFolder,
@@ -57,6 +58,8 @@ export function App() {
   const [dialog, setDialog] = useState<DialogState>(null);
   const [run, setRun] = useState<RunState | null>(null);
   const [editorDirty, setEditorDirty] = useState(false);
+  /** Failures from actions with no dialog to show them in (drag-and-drop moves). */
+  const [actionError, setActionError] = useState<string | null>(null);
   const [theme, toggleTheme] = useTheme();
 
   const refresh = useMemo(
@@ -128,6 +131,29 @@ export function App() {
       setLoadError((error as Error).message);
     } finally {
       setRun((r) => (r ? { ...r, running: false } : r));
+    }
+  }
+
+  async function handleMoveRequest(
+    from: { collectionId: string; path: string },
+    toCollectionId: string,
+    toPath: string,
+  ) {
+    // Moving the open request remounts its editor, so unsaved edits would
+    // vanish silently — a rename dialog can warn, a drop can't.
+    if (isOpenRequest(from.collectionId, from.path) && editorDirty) {
+      setActionError("Save or discard your edits before moving the open request.");
+      return;
+    }
+    try {
+      await moveRequest(from.collectionId, from.path, toCollectionId, toPath);
+      setActionError(null);
+      if (isOpenRequest(from.collectionId, from.path)) {
+        setSelection({ kind: "request", collectionId: toCollectionId, path: toPath });
+      }
+      await refresh();
+    } catch (error) {
+      setActionError(`Could not move ${from.path}: ${(error as Error).message}`);
     }
   }
 
@@ -541,6 +567,14 @@ export function App() {
           </button>
         )}
       </header>
+      {actionError && (
+        <div className="action-error" role="alert">
+          <span>{actionError}</span>
+          <button className="ghost icon-only" aria-label="Dismiss error" onClick={() => setActionError(null)}>
+            ✕
+          </button>
+        </div>
+      )}
       <div className="layout">
         <Sidebar
           workspace={workspace}
@@ -551,6 +585,9 @@ export function App() {
           onSelectEnvironment={selectEnvironment}
           onActivateCollection={setActiveId}
           onAction={handleAction}
+          onMoveRequest={(from, toCollectionId, toPath) =>
+            void handleMoveRequest(from, toCollectionId, toPath)
+          }
         />
         <main className="main">
           {showDocs ? (
@@ -611,7 +648,8 @@ export function App() {
               </p>
               <p className="hint">
                 Tips: <kbd>⌘</kbd>+<kbd>Enter</kbd> sends the open request, <kbd>⌘</kbd>+
-                <kbd>S</kbd> saves it. Hover a collection, folder, or request for its ⋯ menu.
+                <kbd>S</kbd> saves it. Hover a collection, folder, or request for its ⋯ menu, or
+                drag a request onto a folder or collection to move it.
               </p>
             </div>
           )}

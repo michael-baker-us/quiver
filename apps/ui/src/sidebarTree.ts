@@ -72,6 +72,23 @@ export function buildTree(
   return root;
 }
 
+/**
+ * Where a dragged request lands when dropped on a folder ("" means the
+ * collection root): same file name, new parent. Null when the drop would be
+ * a no-op — the request already lives there.
+ */
+export function dropDestination(
+  from: { collectionId: string; path: string },
+  toCollectionId: string,
+  toFolder: string,
+): string | null {
+  const slash = from.path.lastIndexOf("/");
+  const fileName = slash === -1 ? from.path : from.path.slice(slash + 1);
+  const toPath = toFolder === "" ? fileName : `${toFolder}/${fileName}`;
+  if (from.collectionId === toCollectionId && toPath === from.path) return null;
+  return toPath;
+}
+
 function requestMatches(request: RequestSummary, needle: string): boolean {
   return (
     request.name.toLowerCase().includes(needle) ||

@@ -181,6 +181,21 @@ export async function renameRequest(
   await jsonRequest(collectionUrl(collectionId, "/requests/rename"), "POST", { from, to });
 }
 
+/** Moves a request file, possibly across collections (drag-and-drop). */
+export async function moveRequest(
+  fromCollection: string,
+  fromPath: string,
+  toCollection: string,
+  toPath: string,
+): Promise<void> {
+  await jsonRequest("/api/requests/move", "POST", {
+    fromCollection,
+    fromPath,
+    toCollection,
+    toPath,
+  });
+}
+
 export async function deleteRequest(
   collectionId: string,
   relativePath: string,

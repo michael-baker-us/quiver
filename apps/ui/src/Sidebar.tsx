@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import type { CollectionSummary, WorkspaceInfo } from "./api.js";
 import { ContextMenu, type MenuItem } from "./ContextMenu.js";
-import { buildTree, filterTree, type TreeNode } from "./sidebarTree.js";
+import { buildTree, dropDestination, filterTree, type TreeNode } from "./sidebarTree.js";
 
 export function MethodBadge({ method }: { method: string }) {
   const label = method === "DELETE" ? "DEL" : method === "OPTIONS" ? "OPT" : method;
@@ -41,6 +41,12 @@ interface MenuState {
   items: MenuItem[];
 }
 
+/** The request being dragged, tracked in state because dataTransfer payloads are unreadable during dragover. */
+interface DragState {
+  collectionId: string;
+  path: string;
+}
+
 export function Sidebar({
   workspace,
   selection,
@@ -50,6 +56,7 @@ export function Sidebar({
   onSelectEnvironment,
   onActivateCollection,
   onAction,
+  onMoveRequest,
 }: {
   workspace: WorkspaceInfo;
   selection: Selection | null;
@@ -59,10 +66,40 @@ export function Sidebar({
   onSelectEnvironment: (collectionId: string, name: string) => void;
   onActivateCollection: (collectionId: string) => void;
   onAction: (action: SidebarAction) => void;
+  onMoveRequest: (from: DragState, toCollectionId: string, toPath: string) => void;
 }) {
   const [filter, setFilter] = useState("");
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [menu, setMenu] = useState<MenuState | null>(null);
+  const [drag, setDrag] = useState<DragState | null>(null);
+  const [dropKey, setDropKey] = useState<string | null>(null);
+
+  /**
+   * Drop-target handlers for a folder row or collection header. `toFolder`
+   * is "" for the collection root. Returns nothing while no drag is in
+   * flight or when dropping here would be a no-op, so invalid targets never
+   * highlight or accept the drop.
+   */
+  function dropProps(key: string, toCollectionId: string, toFolder: string) {
+    if (!drag) return {};
+    const destination = dropDestination(drag, toCollectionId, toFolder);
+    if (destination === null) return {};
+    return {
+      onDragOver: (event: React.DragEvent) => {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "move";
+        setDropKey(key);
+      },
+      onDragLeave: () => setDropKey((current) => (current === key ? null : current)),
+      onDrop: (event: React.DragEvent) => {
+        event.preventDefault();
+        const from = drag;
+        setDrag(null);
+        setDropKey(null);
+        onMoveRequest(from, toCollectionId, destination);
+      },
+    };
+  }
 
   const filtering = filter.trim() !== "";
   const single = workspace.mode === "collection";
@@ -153,7 +190,11 @@ export function Sidebar({
             const isCollapsed = !filtering && collapsed.has(key);
             return (
               <li key={key}>
-                <div className="tree-row" style={{ paddingLeft: depth * 14 }}>
+                <div
+                  className={dropKey === key ? "tree-row drop-target" : "tree-row"}
+                  style={{ paddingLeft: depth * 14 }}
+                  {...dropProps(key, collectionId, node.path)}
+                >
                   <button className="folder-header" onClick={() => toggle(key)}>
                     <span className={`chevron ${isCollapsed ? "" : "open"}`}>▶</span>
                     {node.name}
@@ -175,9 +216,27 @@ export function Sidebar({
             selection?.kind === "request" &&
             selection.collectionId === collectionId &&
             selection.path === request.relativePath;
+          // An unsaved draft has no file on disk yet, so there is nothing to move.
+          const isDraft =
+            draft?.collectionId === collectionId && draft.path === request.relativePath;
+          const isDragging =
+            drag?.collectionId === collectionId && drag.path === request.relativePath;
           return (
             <li key={request.relativePath}>
-              <div className="tree-row" style={{ paddingLeft: depth * 14 }}>
+              <div
+                className={isDragging ? "tree-row dragging" : "tree-row"}
+                style={{ paddingLeft: depth * 14 }}
+                draggable={!isDraft}
+                onDragStart={(event) => {
+                  event.dataTransfer.setData("text/plain", request.relativePath);
+                  event.dataTransfer.effectAllowed = "move";
+                  setDrag({ collectionId, path: request.relativePath });
+                }}
+                onDragEnd={() => {
+                  setDrag(null);
+                  setDropKey(null);
+                }}
+              >
                 <button
                   className={isSelected ? "request-row selected" : "request-row"}
                   onClick={() => onSelectRequest(collectionId, request.relativePath)}
@@ -244,9 +303,17 @@ export function Sidebar({
           const matchesName = collection.name.toLowerCase().includes(filter.trim().toLowerCase());
           if (filtering && nodes.length === 0 && !matchesName) return null;
           const isActive = collection.id === activeCollectionId;
+          const dropTargetKey = `c:drop:${collection.id}`;
           return (
             <section key={collection.id} className={isActive ? "collection active" : "collection"}>
-              <div className="tree-row collection-row">
+              <div
+                className={
+                  dropKey === dropTargetKey
+                    ? "tree-row collection-row drop-target"
+                    : "tree-row collection-row"
+                }
+                {...(collection.error ? {} : dropProps(dropTargetKey, collection.id, ""))}
+              >
                 <button
                   className="collection-header"
                   title={collection.id === "." ? undefined : collection.id}

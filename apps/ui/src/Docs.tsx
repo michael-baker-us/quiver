@@ -22,7 +22,9 @@ export function Docs() {
         <strong>workspace</strong>. The <strong>+ New</strong> button creates
         collections, requests, folders, and environments; hovering a
         collection, folder, request, or environment reveals a{" "}
-        <strong>⋯</strong> menu with rename and delete.
+        <strong>⋯</strong> menu with rename and delete. Drag a request onto a
+        folder or a collection header to move it there — on disk that&apos;s
+        just the file moving.
       </p>
       <p>
         Everything those menus do is an ordinary file operation: a new

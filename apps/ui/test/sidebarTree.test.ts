@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { RequestSummary } from "../src/api.js";
-import { buildTree, filterTree, type TreeNode } from "../src/sidebarTree.js";
+import { buildTree, dropDestination, filterTree, type TreeNode } from "../src/sidebarTree.js";
 
 function req(relativePath: string, name = relativePath, method = "GET"): RequestSummary {
   return { relativePath, name, method: method as RequestSummary["method"] };
@@ -101,5 +101,31 @@ describe("filterTree", () => {
   it("empty needle returns the tree unchanged; no match returns nothing", () => {
     expect(filterTree(tree, "  ")).toBe(tree);
     expect(filterTree(tree, "zzz")).toEqual([]);
+  });
+});
+
+describe("dropDestination", () => {
+  const from = { collectionId: "alpha", path: "users/01-list.request.yaml" };
+
+  it("moves into a folder keeping the file name", () => {
+    expect(dropDestination(from, "alpha", "auth")).toBe("auth/01-list.request.yaml");
+    expect(dropDestination(from, "alpha", "users/admin")).toBe(
+      "users/admin/01-list.request.yaml",
+    );
+  });
+
+  it("moves to the collection root when the folder is empty", () => {
+    expect(dropDestination(from, "alpha", "")).toBe("01-list.request.yaml");
+  });
+
+  it("is a no-op when dropped where it already lives", () => {
+    expect(dropDestination(from, "alpha", "users")).toBeNull();
+    expect(
+      dropDestination({ collectionId: "alpha", path: "ping.request.yaml" }, "alpha", ""),
+    ).toBeNull();
+  });
+
+  it("the same folder path in another collection is a real move", () => {
+    expect(dropDestination(from, "beta", "users")).toBe("users/01-list.request.yaml");
   });
 });

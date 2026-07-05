@@ -346,6 +346,60 @@ describe("workspace mode", () => {
     expect(gone.status).toBe(404);
   });
 
+  it("moves a request between collections via POST /api/requests/move", async () => {
+    await fetch(`${ui.url}/api/collections/alpha/requests/mover.request.yaml`, {
+      method: "PUT",
+      body: JSON.stringify({ content: `name: Mover\nmethod: GET\nurl: "${apiBaseUrl}/m"` }),
+    });
+
+    const moved = await fetch(`${ui.url}/api/requests/move`, {
+      method: "POST",
+      body: JSON.stringify({
+        fromCollection: "alpha",
+        fromPath: "mover.request.yaml",
+        toCollection: "nested/beta",
+        toPath: "things/mover.request.yaml",
+      }),
+    });
+    expect(moved.status).toBe(200);
+
+    const inBeta = await fetch(
+      `${ui.url}/api/collections/nested%2Fbeta/requests/things/mover.request.yaml`,
+    );
+    expect(inBeta.status).toBe(200);
+    const goneFromAlpha = await fetch(
+      `${ui.url}/api/collections/alpha/requests/mover.request.yaml`,
+    );
+    expect(goneFromAlpha.status).toBe(404);
+
+    const badCollection = await fetch(`${ui.url}/api/requests/move`, {
+      method: "POST",
+      body: JSON.stringify({
+        fromCollection: "nested/beta",
+        fromPath: "things/mover.request.yaml",
+        toCollection: "nowhere",
+        toPath: "mover.request.yaml",
+      }),
+    });
+    expect(badCollection.status).toBe(404);
+
+    const conflict = await fetch(`${ui.url}/api/requests/move`, {
+      method: "POST",
+      body: JSON.stringify({
+        fromCollection: "nested/beta",
+        fromPath: "things/mover.request.yaml",
+        toCollection: "nested/beta",
+        toPath: "things/get-thing.request.yaml",
+      }),
+    });
+    expect(conflict.status).toBe(409);
+
+    // Clean up so other tests' workspace listings are unaffected.
+    await fetch(`${ui.url}/api/collections/nested%2Fbeta/requests/things/mover.request.yaml`, {
+      method: "DELETE",
+    });
+  });
+
   it("creates, edits, renames, and deletes environments", async () => {
     const created = await fetch(`${ui.url}/api/collections/alpha/environments`, {
       method: "POST",

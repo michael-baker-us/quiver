@@ -1,6 +1,6 @@
 name: List users
 method: GET
-url: "{{baseUrl}}/users"
+url: https://petstore3.swagger.io/api/v3/pet/findByStatus?status=available
 tests:
   - status: 200
   - header: content-type

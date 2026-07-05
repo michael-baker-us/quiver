@@ -12,6 +12,7 @@ import {
   deleteFolder,
   deleteRequest,
   renameEnvironment,
+  moveRequest,
   renameFolder,
   renameRequest,
   resolveInside,
@@ -193,6 +194,43 @@ describe("requests", () => {
     await expectError(renameRequest(dir, "a.request.yaml", "b.request.yaml"), "conflict");
     await expectError(renameRequest(dir, "x.request.yaml", "y.request.yaml"), "not-found");
     await expectError(renameRequest(dir, "a.request.yaml", "../b.request.yaml"), "invalid");
+  });
+
+  it("moves a request between two collection roots, creating target folders", async () => {
+    const fromRoot = path.join(dir, "alpha");
+    const toRoot = path.join(dir, "beta");
+    await mkdir(fromRoot, { recursive: true });
+    await mkdir(toRoot, { recursive: true });
+    await writeFile(path.join(fromRoot, "a.request.yaml"), REQUEST_YAML);
+
+    await moveRequest(fromRoot, "a.request.yaml", toRoot, "users/a.request.yaml");
+    const raw = await readFile(path.join(toRoot, "users", "a.request.yaml"), "utf8");
+    expect(raw).toBe(REQUEST_YAML);
+    await expectError(deleteRequest(fromRoot, "a.request.yaml"), "not-found");
+  });
+
+  it("guards cross-root moves like renames: conflicts, missing sources, traversal", async () => {
+    const fromRoot = path.join(dir, "alpha");
+    const toRoot = path.join(dir, "beta");
+    await mkdir(fromRoot, { recursive: true });
+    await mkdir(toRoot, { recursive: true });
+    await writeFile(path.join(fromRoot, "a.request.yaml"), REQUEST_YAML);
+    await writeFile(path.join(toRoot, "a.request.yaml"), REQUEST_YAML);
+
+    await expectError(
+      moveRequest(fromRoot, "a.request.yaml", toRoot, "a.request.yaml"),
+      "conflict",
+    );
+    await expectError(
+      moveRequest(fromRoot, "ghost.request.yaml", toRoot, "b.request.yaml"),
+      "not-found",
+    );
+    // "../a.request.yaml" from beta's perspective points back into alpha.
+    await expectError(
+      moveRequest(fromRoot, "a.request.yaml", toRoot, "../alpha/b.request.yaml"),
+      "invalid",
+    );
+    await expectError(moveRequest(fromRoot, "a.request.yaml", toRoot, "b.yaml"), "invalid");
   });
 
   it("deletes a request file", async () => {

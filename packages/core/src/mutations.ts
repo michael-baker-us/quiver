@@ -186,10 +186,24 @@ function assertRequestPath(relativePath: string): void {
 }
 
 export async function renameRequest(rootDir: string, from: string, to: string): Promise<void> {
+  await moveRequest(rootDir, from, rootDir, to);
+}
+
+/**
+ * Moves a request file between collection roots (or within one — rename is
+ * this with both roots equal). Both roots must already be validated
+ * collection directories; the paths are guarded here.
+ */
+export async function moveRequest(
+  fromRootDir: string,
+  from: string,
+  toRootDir: string,
+  to: string,
+): Promise<void> {
   assertRequestPath(from);
   assertRequestPath(to);
-  const fromAbs = resolveInside(rootDir, from);
-  const toAbs = resolveInside(rootDir, to);
+  const fromAbs = resolveInside(fromRootDir, from);
+  const toAbs = resolveInside(toRootDir, to);
   if (!(await exists(fromAbs))) throw notFound(`No request found at ${from}`);
   await assertRenameTargetFree(fromAbs, toAbs);
   await mkdir(path.dirname(toAbs), { recursive: true });
