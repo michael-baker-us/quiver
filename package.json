@@ -7,7 +7,7 @@
     "apps/*"
   ],
   "scripts": {
-    "build": "tsc -b packages/core packages/cli packages/server",
+    "build": "tsc -b packages/core packages/cli packages/server && chmod +x packages/cli/dist/index.js",
     "build:ui": "npm -w @quiver/ui run build",
     "test": "vitest run",
     "test:watch": "vitest",

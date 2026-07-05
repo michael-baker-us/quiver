@@ -1,13 +1,34 @@
 # quiver
 
-A Git-friendly API client and collection runner — a Postman replacement you
-can code-review.
+[![CI](https://github.com/michael-baker-us/quiver/actions/workflows/ci.yml/badge.svg)](https://github.com/michael-baker-us/quiver/actions/workflows/ci.yml)
+
+**A Git-friendly API client and collection runner — a Postman replacement you
+can code-review.**
 
 Collections are plain YAML files in your repository: one file per request,
 folders for grouping, environments checked in alongside. A change to an
 endpoint is a one-file diff a teammate can review in a normal PR. The same
-collection runs from the CLI in CI and (milestone 3) from a point-and-click
-web UI for non-technical users.
+collection runs from the CLI in CI and from a point-and-click web UI for
+non-technical users — both are thin clients over the same engine, so they
+behave identically.
+
+![The quiver web UI: a request with its tests, and the response with assertion results](docs/screenshots/ui-request.png)
+
+## Highlights
+
+- **Plain YAML on disk** — every request is a file, every edit is a `git diff`,
+  every delete is recoverable with `git checkout`
+- **Assertions and chaining** — status/header/JSONPath/body/timing checks, plus
+  `capture` to feed values from one response into later requests (login → token
+  → authenticated call)
+- **Secrets stay out of Git** — `{{$env.NAME}}` resolves from OS environment
+  variables; reports redact credential headers automatically
+- **CI-native** — meaningful exit codes, JUnit XML and self-contained HTML
+  reports, a ready-made GitHub Action
+- **OpenAPI import** — generate a working collection skeleton from a 3.x spec
+- **k6 export** — turn a collection into a runnable load-test script
+- **Local web UI** — Postman-style editor for teammates who won't touch a
+  terminal, writing the same YAML files
 
 ## Quick start
 
@@ -16,22 +37,22 @@ npm install
 npm run build
 
 # Run the demo collection against the public JSONPlaceholder API
-node packages/cli/dist/index.js run collections/demo-api --env default
+npx quiver run collections/demo-api --env default
 
 # Send a single request
-node packages/cli/dist/index.js send collections/demo-api/users/01-list-users.request.yaml --env default
+npx quiver send collections/demo-api/users/01-list-users.request.yaml --env default
 
 # See what's in a collection
-node packages/cli/dist/index.js list collections/demo-api
+npx quiver list collections/demo-api
 
 # Generate a collection from an OpenAPI 3.x spec
-node packages/cli/dist/index.js import openapi.yaml --out collections/my-api
+npx quiver import openapi.yaml --out collections/my-api
 
 # Open the point-and-click web UI (build it once with: npm run build:ui)
-node packages/cli/dist/index.js ui collections/demo-api
+npx quiver ui collections/demo-api
 
 # Or point it at a parent directory to manage several collections at once
-node packages/cli/dist/index.js ui collections
+npx quiver ui collections
 ```
 
 ## Collection format
@@ -107,30 +128,6 @@ variables:
 
 JSONPath support is the practical subset: `$.a.b`, `$[0]`, `$["key with spaces"]`.
 
-## Importing an OpenAPI spec
-
-```bash
-quiver import openapi.yaml --out collections/my-api
-```
-
-Also available in the UI: **+ New → Import OpenAPI spec…** creates a new
-collection in the workspace from a YAML or JSON spec file.
-
-Generates one request file per operation, grouped by tag, with:
-
-- example request bodies synthesized from the JSON schemas (`example` /
-  `default` / `enum` values win when present)
-- path and query params filled from examples, or left as `{{param}}`
-  placeholders that fail loudly until you supply a value
-- security schemes mapped to auth blocks referencing `{{$env.*}}` — imported
-  collections never contain literal secrets
-- a status + content-type assertion per request, derived from the spec's
-  `responses`
-
-The importer prints warnings for anything it can't map (OAuth2 flows,
-non-JSON bodies, missing server URLs) instead of guessing. OpenAPI 3.x only;
-convert Swagger 2.0 specs first (e.g. `npx swagger2openapi`).
-
 ## CLI
 
 ```text
@@ -146,7 +143,7 @@ quiver ui         <dir>   [--port <port>] [--no-open]   # <dir> = a collection o
 Exit codes: `0` all passed, `1` failures, `2` usage/config error — safe to
 drop straight into CI.
 
-### Reports for CI (JUnit, HTML)
+## Reports for CI (JUnit, HTML)
 
 ```bash
 quiver run my-api --env ci --reporter junit --output results.xml   # Jenkins/GitLab/GitHub test reports
@@ -160,12 +157,16 @@ The HTML report is a self-contained, clickable page written for people who
 don't use quiver: summary stats, pass/fail filters, and one expandable card
 per request showing its checks and the full exchange — the request as
 actually sent (final URL, headers, body) and the complete response (status,
-headers, body, pretty-printed when JSON). Credential headers (`Authorization`,
-API-key headers, cookies) and captured values are redacted before they reach
-the report or the JSON run file, so both are safe to attach to a ticket or
-email. Request bodies appear exactly as sent, so prefer auth blocks over
-in-body credentials where the API allows it. Response bodies are capped at
-10 kB per request to keep reports a sane size.
+headers, body, pretty-printed when JSON).
+
+![The HTML report: summary stats, filters, and an expanded request card](docs/screenshots/report.png)
+
+Credential headers (`Authorization`, API-key headers, cookies) and captured
+values are redacted before they reach the report or the JSON run file, so
+both are safe to attach to a ticket or email. Request bodies appear exactly
+as sent, so prefer auth blocks over in-body credentials where the API allows
+it. Response bodies are capped at 10 kB per request to keep reports a sane
+size.
 
 If you need more than one format from a single run — the common case in CI — run
 once with `--reporter json` and reformat the saved file, so the collection's
@@ -201,7 +202,31 @@ quiver isn't published to a registry, so the action checks out and builds
 its own source into `.quiver-tool/` before running — the standard pattern
 for a composite action that ships a real CLI. See `.github/actions/run/action.yml`.
 
-### k6 load-test export
+## Importing an OpenAPI spec
+
+```bash
+quiver import openapi.yaml --out collections/my-api
+```
+
+Also available in the UI: **+ New → Import OpenAPI spec…** creates a new
+collection in the workspace from a YAML or JSON spec file.
+
+Generates one request file per operation, grouped by tag, with:
+
+- example request bodies synthesized from the JSON schemas (`example` /
+  `default` / `enum` values win when present)
+- path and query params filled from examples, or left as `{{param}}`
+  placeholders that fail loudly until you supply a value
+- security schemes mapped to auth blocks referencing `{{$env.*}}` — imported
+  collections never contain literal secrets
+- a status + content-type assertion per request, derived from the spec's
+  `responses`
+
+The importer prints warnings for anything it can't map (OAuth2 flows,
+non-JSON bodies, missing server URLs) instead of guessing. OpenAPI 3.x only;
+convert Swagger 2.0 specs first (e.g. `npx swagger2openapi`).
+
+## k6 load-test export
 
 ```bash
 quiver export-k6 my-api --env staging --out script.js --vus 20 --duration 2m
@@ -231,6 +256,8 @@ same YAML files on disk, so every change made in the UI shows up in
 `git diff`. Saves are validated against the request schema server-side; the
 UI cannot produce a file the CLI would reject. The server binds to 127.0.0.1
 only.
+
+![Run all results in the web UI, dark theme](docs/screenshots/ui-run-results.png)
 
 Point `quiver ui` at a directory containing several collections (any folder
 with a `collection.yaml` up to three levels down) and the sidebar shows all
@@ -288,29 +315,48 @@ apps/
 └── workflows/    # this repo's own CI (unit tests + a dogfooding API-test job)
 ```
 
-The core package is the product; the CLI (and the future web UI) are thin
-clients. Anything a client can do must be expressible through core's API —
-that discipline is what keeps the GUI and CLI behavior identical.
+The core package is the product; the CLI and web UI are thin clients.
+Anything a client can do must be expressible through core's API — that
+discipline is what keeps the GUI and CLI behavior identical.
 
 ## Roadmap
 
-- [x] **M1 — engine + CLI runner**: YAML collection format, environments,
-      secrets via `$env`, assertions, capture/chaining, pretty + JSON reporters
-- [x] **M2 — OpenAPI import**: generate a collection skeleton from a spec
-- [x] **M3 — web UI**: `quiver ui` opens a local app; reads/writes the same
-      YAML files, aimed at non-technical teammates
-- [x] **M4 — integrations**: JUnit XML reporter (Jenkins/GitLab), HTML report,
-      GitHub Action, k6 script export
-- [x] Form-based request editor in the UI (alongside YAML view)
-- [x] Multi-collection workspaces: create/rename/delete collections, folders,
-      requests, and environments from the UI; environment key/value editor
-- [ ] Later: cookies/sessions, file upload, request scripts, parallel runs,
-      watch mode (auto-refresh on external file changes), a JMeter/Newman
-      export alongside k6
+Planned next:
+
+- Cookies and sessions (a cookie jar across a run)
+- File upload (`multipart/form-data` bodies)
+- Pre/post request scripts
+- Parallel runs
+- Watch mode (auto-refresh the UI when files change on disk externally)
+- JMeter / Newman export alongside k6
+
+Ideas worth exploring:
+
+- **Data-driven runs** — iterate a request over rows of a CSV/JSON fixture,
+  one testcase per row
+- **Contract testing** — validate live responses against the collection's
+  OpenAPI schema and report drift, not just hand-written assertions
+- **Mock server** — `quiver mock my-api` serves the collection's example
+  responses, so a frontend can build against an API that doesn't exist yet
+- **Run diffing** — compare two saved run JSONs (staging vs. prod, before
+  vs. after a deploy) and report what changed
+- **Monitoring mode** — scheduled runs with webhook/Slack notifications,
+  turning any collection into a cheap uptime check
+- **Snapshot testing** — record a response once, assert future responses
+  match it modulo ignored fields (timestamps, IDs)
+- **GraphQL support** — a first-class query/variables body type with the
+  same assertion and capture model
+- **Performance trends** — persist run timings across CI runs and surface
+  slow-endpoint regressions over time
+- **Editor integration** — a VS Code extension that sends the
+  `*.request.yaml` you're editing and shows results inline
+- **Packaging** — publish the CLI to npm and ship standalone binaries, so
+  `quiver` installs without cloning this repo
 
 ## Development
 
 ```bash
 npm test          # vitest (unit + integration against a local http server)
 npm run build     # tsc project references
+npm run build:ui  # build the web UI into packages/server/public
 ```
