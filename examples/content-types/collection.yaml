@@ -1,7 +1,9 @@
 name: Content Types Demo
 description: >
-  XML and CSV request bodies posted to httpbin.org, which echoes the
-  request back as JSON so the tests can verify what was sent.
+  XML and CSV in both directions. Requests 01-02 post XML/CSV bodies to
+  httpbin.org, which echoes them back as JSON so the tests can verify what
+  was sent. Requests 03-04 fetch real XML and CSV responses to exercise the
+  response viewer's highlighting and table rendering.
   Run it with: quiver run examples/content-types --env default
 defaults:
   headers:

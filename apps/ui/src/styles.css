@@ -945,6 +945,45 @@ textarea.editor {
 .json-number { color: var(--json-number); }
 .json-literal { color: var(--json-literal); }
 
+.xml-tag { color: var(--json-key); }
+.xml-attr { color: var(--json-number); }
+.xml-string { color: var(--json-string); }
+.xml-comment { color: var(--text-faint); }
+
+.csv-view {
+  padding: 0;
+}
+
+.csv-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+.csv-table th,
+.csv-table td {
+  padding: 0.3rem 0.6rem;
+  text-align: left;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--border);
+}
+
+.csv-table th + th,
+.csv-table td + td {
+  border-left: 1px solid var(--border);
+}
+
+.csv-table th {
+  background: var(--bg-sunken);
+  position: sticky;
+  top: 0;
+}
+
+.csv-truncated {
+  padding: 0.4rem 0.6rem;
+  color: var(--text-dim);
+}
+
 /* ---- docs ---- */
 .docs {
   padding: 1.5rem 2.5rem 4rem;

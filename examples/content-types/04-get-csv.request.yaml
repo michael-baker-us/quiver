@@ -1,0 +1,10 @@
+name: Get a CSV response
+method: GET
+url: "{{csvBaseUrl}}/airtravel.csv"
+headers:
+  Accept: text/csv
+tests:
+  - status: 200
+  - header: content-type
+    contains: text/csv
+  - bodyContains: '"JAN"'

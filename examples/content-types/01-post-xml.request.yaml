@@ -1,6 +1,8 @@
 name: Post an XML body
 method: POST
 url: "{{baseUrl}}/post"
+headers:
+  Accept: application/xml
 body:
   type: xml
   content: >

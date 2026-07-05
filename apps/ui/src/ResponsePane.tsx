@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import type { SendResult } from "./api.js";
 import { tokenizeJson } from "./jsonHighlight.js";
+import { tokenizeXml } from "./xmlHighlight.js";
+import { detectBodyFormat, parseCsv } from "./responseBody.js";
 
 function StatusPill({ status, statusText }: { status: number; statusText: string }) {
   const kind = status < 300 ? "ok" : status < 500 ? "warn" : "err";
@@ -34,6 +36,62 @@ function HighlightedJson({ text }: { text: string }) {
   );
 }
 
+function HighlightedXml({ text }: { text: string }) {
+  const tokens = useMemo(() => tokenizeXml(text), [text]);
+  return (
+    <pre className="body-view">
+      {tokens.map((token, i) =>
+        token.type === "plain" ? (
+          token.text
+        ) : (
+          <span key={i} className={`xml-${token.type}`}>
+            {token.text}
+          </span>
+        ),
+      )}
+    </pre>
+  );
+}
+
+/** Rows rendered beyond the header — enough to inspect, cheap to mount. */
+const CSV_PREVIEW_ROWS = 200;
+
+function CsvTable({ text }: { text: string }) {
+  const rows = useMemo(() => parseCsv(text), [text]);
+  if (!rows || rows.length === 0) {
+    return <pre className="body-view">{text}</pre>;
+  }
+  const [header = [], ...data] = rows;
+  const shown = data.slice(0, CSV_PREVIEW_ROWS);
+  return (
+    <div className="body-view csv-view">
+      <table className="csv-table">
+        <thead>
+          <tr>
+            {header.map((cell, i) => (
+              <th key={i}>{cell}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {shown.map((cells, i) => (
+            <tr key={i}>
+              {cells.map((cell, j) => (
+                <td key={j}>{cell}</td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {data.length > shown.length && (
+        <div className="csv-truncated">
+          Showing {shown.length} of {data.length} rows
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function AssertionList({ result }: { result: SendResult }) {
   if (result.assertions.length === 0) return null;
   return (
@@ -61,12 +119,16 @@ export function ResponsePane({ result }: { result: SendResult }) {
   if (!result.response) return null;
   const response = result.response;
 
-  const isJson = response.bodyJson !== undefined;
-  const body = isJson
-    ? JSON.stringify(response.bodyJson, null, 2)
-    : (response.bodyText ?? "");
+  const contentType = Object.entries(response.headers ?? {}).find(
+    ([key]) => key.toLowerCase() === "content-type",
+  )?.[1];
+  const format = detectBodyFormat(contentType, response.bodyJson !== undefined);
+  const body =
+    format === "json"
+      ? JSON.stringify(response.bodyJson, null, 2)
+      : (response.bodyText ?? "");
   const sizeBytes = new TextEncoder().encode(
-    response.bodyText ?? (isJson ? body : ""),
+    response.bodyText ?? (format === "json" ? body : ""),
   ).length;
 
   return (
@@ -101,8 +163,12 @@ export function ResponsePane({ result }: { result: SendResult }) {
         </button>
       </div>
       {tab === "body" ? (
-        isJson ? (
+        format === "json" ? (
           <HighlightedJson text={body} />
+        ) : format === "xml" ? (
+          <HighlightedXml text={body} />
+        ) : format === "csv" ? (
+          <CsvTable text={body} />
         ) : (
           <pre className="body-view">{body}</pre>
         )

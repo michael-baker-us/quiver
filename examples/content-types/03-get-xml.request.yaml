@@ -1,0 +1,10 @@
+name: Get an XML response
+method: GET
+url: "{{baseUrl}}/xml"
+headers:
+  Accept: application/xml
+tests:
+  - status: 200
+  - header: content-type
+    contains: application/xml
+  - bodyContains: <slideshow

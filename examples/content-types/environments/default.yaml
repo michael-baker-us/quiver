@@ -1,2 +1,5 @@
 variables:
   baseUrl: https://httpbin.org
+  # Small public sample dataset served with a real text/csv content type
+  # (httpbin has an /xml endpoint but nothing that returns CSV).
+  csvBaseUrl: https://people.sc.fsu.edu/~jburkardt/data/csv
