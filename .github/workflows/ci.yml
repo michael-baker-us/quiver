@@ -34,7 +34,7 @@ jobs:
         run: |
           QUIVER=packages/cli/dist/index.js
           set +e
-          node "$QUIVER" run examples/demo-api --env default --reporter json --output quiver-run.json
+          node "$QUIVER" run collections/demo-api --env default --reporter json --output quiver-run.json
           RUN_EXIT=$?
           set -e
           node "$QUIVER" report quiver-run.json --format junit --output quiver-results.xml
