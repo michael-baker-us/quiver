@@ -6,6 +6,7 @@ import {
   type TestFormRow,
 } from "./requestFormData.js";
 import { VariableTextarea } from "./VariableInput.js";
+import { formatJson, formatXml } from "./bodyFormat.js";
 
 export type FormTab =
   | "params"
@@ -299,20 +300,44 @@ export function RequestFormTab({
           jsonBodyError = (error as Error).message;
         }
       }
+      function formatBody() {
+        if (value.bodyType === "json") {
+          const pretty = formatJson(value.bodyJsonText);
+          if (pretty !== null) set("bodyJsonText", pretty);
+        } else if (value.bodyType === "xml") {
+          set("bodyPlainText", formatXml(value.bodyPlainText));
+        }
+      }
+      const canFormat = value.bodyType === "json" || value.bodyType === "xml";
       return (
         <>
-          <select
-            style={{ alignSelf: "flex-start" }}
-            value={value.bodyType}
-            onChange={(e) => set("bodyType", e.target.value as RequestFormData["bodyType"])}
-          >
-            <option value="none">None</option>
-            <option value="json">JSON</option>
-            <option value="text">Plain text</option>
-            <option value="xml">XML (application/xml)</option>
-            <option value="csv">CSV (text/csv)</option>
-            <option value="form">Form (application/x-www-form-urlencoded)</option>
-          </select>
+          <div className="body-toolbar">
+            <select
+              value={value.bodyType}
+              onChange={(e) => set("bodyType", e.target.value as RequestFormData["bodyType"])}
+            >
+              <option value="none">None</option>
+              <option value="json">JSON</option>
+              <option value="text">Plain text</option>
+              <option value="xml">XML (application/xml)</option>
+              <option value="csv">CSV (text/csv)</option>
+              <option value="form">Form (application/x-www-form-urlencoded)</option>
+            </select>
+            {canFormat && (
+              <button
+                className="ghost"
+                onClick={formatBody}
+                disabled={value.bodyType === "json" && jsonBodyError !== null}
+                title={
+                  value.bodyType === "json" && jsonBodyError !== null
+                    ? "Fix the JSON before formatting"
+                    : "Reindent the body"
+                }
+              >
+                Format
+              </button>
+            )}
+          </div>
           {value.bodyType === "json" && (
             <>
               <VariableTextarea
@@ -320,6 +345,7 @@ export function RequestFormTab({
                 value={value.bodyJsonText}
                 onChange={(text) => set("bodyJsonText", text)}
                 variables={variables}
+                syntax="json"
               />
               {jsonBodyError && (
                 <div className="field-error">Not valid JSON: {jsonBodyError}</div>
@@ -332,6 +358,7 @@ export function RequestFormTab({
               value={value.bodyPlainText}
               onChange={(text) => set("bodyPlainText", text)}
               variables={variables}
+              syntax={value.bodyType === "xml" ? "xml" : undefined}
             />
           )}
           {value.bodyType === "form" && (

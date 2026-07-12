@@ -658,6 +658,13 @@ textarea.editor {
   flex: 0 1 auto;
 }
 
+.body-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  align-self: flex-start;
+}
+
 .yaml-pane {
   flex: 1;
   min-height: 0;

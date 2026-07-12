@@ -226,8 +226,19 @@ export function toFormData(def: Partial<RequestDefinition>): RequestFormData {
     authApiKeyHeader: auth?.type === "apikey" ? auth.header : "X-API-Key",
     authApiKeyValue: auth?.type === "apikey" ? auth.value : "",
     bodyType: body?.type ?? "none",
+    // String content means the JSON was invalid when last serialized:
+    // fromFormData stores unparseable text verbatim as a string so nothing is
+    // dropped. Show that text as-is rather than JSON.stringify-ing it, which
+    // would double-encode newlines/quotes into literal \n and \" sequences.
+    // (A genuine top-level JSON string body — rare — will show unquoted and
+    // flag as invalid until the user quotes it; an acceptable trade for never
+    // corrupting an in-progress object body.)
     bodyJsonText:
-      body?.type === "json" ? JSON.stringify(body.content, null, 2) : base.bodyJsonText,
+      body?.type === "json"
+        ? typeof body.content === "string"
+          ? body.content
+          : JSON.stringify(body.content, null, 2)
+        : base.bodyJsonText,
     bodyPlainText:
       body?.type === "text" || body?.type === "xml" || body?.type === "csv"
         ? body.content

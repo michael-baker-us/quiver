@@ -218,3 +218,37 @@ describe("parseRequestContent", () => {
     expect(reparsed).toEqual(parsed);
   });
 });
+
+describe("JSON body round-trip does not double-encode invalid text", () => {
+  function bodyJsonAfterRoundTrip(bodyJsonText: string): string {
+    const form = {
+      ...emptyFormData(),
+      method: "POST" as const,
+      url: "http://x",
+      bodyType: "json" as const,
+      bodyJsonText,
+    };
+    const yaml = stringifyFormData(form);
+    const parsed = parseRequestContent(yaml);
+    if (!("data" in parsed)) throw new Error(parsed.error);
+    return parsed.data.bodyJsonText;
+  }
+
+  it("preserves invalid-in-progress JSON verbatim instead of escaping newlines", () => {
+    // Regression: invalid JSON was stored as a string, then JSON.stringify-ed
+    // back into literal \n and \" sequences in the textarea.
+    const text = '{\n  "name": "test",\n}';
+    expect(bodyJsonAfterRoundTrip(text)).toBe(text);
+  });
+
+  it("reformats valid JSON into 2-space indentation", () => {
+    expect(bodyJsonAfterRoundTrip('{"a":1}')).toBe('{\n  "a": 1\n}');
+  });
+
+  it("is idempotent across repeated round-trips of invalid text", () => {
+    const text = "{ not json at all";
+    const once = bodyJsonAfterRoundTrip(text);
+    expect(once).toBe(text);
+    expect(bodyJsonAfterRoundTrip(once)).toBe(text);
+  });
+});

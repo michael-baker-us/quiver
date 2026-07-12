@@ -5,6 +5,7 @@ import {
   tokenizeVariables,
   type VariableResolution,
 } from "./varHighlight.js";
+import { highlightSyntax, type BodySyntax } from "./bodyHighlight.js";
 
 // Overlay technique: the real <input>/<textarea> keeps focus, editing, and
 // scrolling, but renders its text transparent. A mirror <div> with identical
@@ -61,11 +62,14 @@ function HighlightOverlay({
   variables,
   controlRef,
   multiline,
+  syntax,
 }: {
   text: string;
   variables: Record<string, string>;
   controlRef: RefObject<Control | null>;
   multiline: boolean;
+  /** When set, literal runs between {{variables}} are syntax-colored. */
+  syntax?: BodySyntax;
 }) {
   const mirrorRef = useRef<HTMLDivElement>(null);
   const [tooltip, setTooltip] = useState<Tooltip | null>(null);
@@ -145,6 +149,16 @@ function HighlightOverlay({
             >
               {token.raw}
             </span>
+          ) : syntax ? (
+            highlightSyntax(token.raw, syntax).map((span, i) =>
+              span.className === null ? (
+                span.text
+              ) : (
+                <span key={`${token.start}-${i}`} className={span.className}>
+                  {span.text}
+                </span>
+              ),
+            )
           ) : (
             token.raw
           ),
@@ -212,11 +226,14 @@ export function VariableTextarea({
   onChange,
   variables,
   className,
+  syntax,
 }: {
   value: string;
   onChange: (value: string) => void;
   variables: Record<string, string>;
   className?: string;
+  /** Syntax-color the body between {{variables}} (JSON/XML editors). */
+  syntax?: BodySyntax;
 }) {
   const ref = useRef<HTMLTextAreaElement>(null);
   return (
@@ -228,7 +245,13 @@ export function VariableTextarea({
         value={value}
         onChange={(e) => onChange(e.target.value)}
       />
-      <HighlightOverlay text={value} variables={variables} controlRef={ref} multiline />
+      <HighlightOverlay
+        text={value}
+        variables={variables}
+        controlRef={ref}
+        multiline
+        syntax={syntax}
+      />
     </div>
   );
 }
